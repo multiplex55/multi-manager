@@ -1,4 +1,4 @@
-use crate::window_manager::get_active_window;
+use crate::window_manager::listen_for_keys_with_dialog;
 use crate::workspace::{save_workspaces, Window, Workspace};
 use eframe::egui;
 use eframe::{self, App as EframeApp};
@@ -32,41 +32,75 @@ impl EframeApp for App {
 
             // Capture Window Button
             if ui.button("Capture Active Window").clicked() {
-                if let Some(hwnd) = get_active_window() {
-                    let new_window = Window {
-                        id: hwnd.0 as usize,
-                        title: format!("Window {:?}", hwnd.0), // Replace with actual title fetching
-                        home: (0, 0, 800, 600),                // Replace with actual dimensions
-                        target: (0, 0, 800, 600),              // Replace with desired dimensions
-                    };
+                match listen_for_keys_with_dialog() {
+                    Some("Enter") => {
+                        if let Some(hwnd) = crate::window_manager::get_active_window() {
+                            let new_window = Window {
+                                id: hwnd.0 as usize,
+                                title: format!("Window {:?}", hwnd.0),
+                                home: (0, 0, 800, 600),
+                                target: (0, 0, 800, 600),
+                            };
 
-                    let new_workspace = Workspace {
-                        name: format!("Workspace {}", self.workspaces.len() + 1),
-                        hotkey: None,
-                        windows: vec![new_window],
-                    };
+                            let new_workspace = Workspace {
+                                name: format!("Workspace {}", self.workspaces.len() + 1),
+                                hotkey: None,
+                                windows: vec![new_window],
+                            };
 
-                    self.workspaces.push(new_workspace);
+                            self.workspaces.push(new_workspace);
+                        }
+                    }
+                    Some("Esc") => {
+                        ui.label("Window capture canceled.");
+                    }
+                    _ => {}
                 }
             }
 
-            // List Workspaces
             ui.separator();
-            let mut indices_to_remove = Vec::new();
-            for (i, workspace) in self.workspaces.iter().enumerate() {
-                ui.horizontal(|ui| {
-                    ui.label(&workspace.name);
 
-                    // Delete Workspace Button
-                    if ui.button("Delete").clicked() {
-                        indices_to_remove.push(i);
+            // Collect updates to avoid mutable/immutable borrow conflict
+            let mut actions = Vec::new();
+
+            for (i, workspace) in self.workspaces.iter().enumerate() {
+                egui::CollapsingHeader::new(&workspace.name)
+                    .id_salt(i) // Updated to use `id_salt`
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        for window in &workspace.windows {
+                            ui.horizontal(|ui| {
+                                ui.label(&window.title);
+                                if ui.button("Remove").clicked() {
+                                    // Mark the window for removal
+                                    actions.push(("remove_window", i, Some(window.id)));
+                                }
+                            });
+                        }
+
+                        if ui.button("Delete Workspace").clicked() {
+                            // Mark the workspace for deletion
+                            actions.push(("delete_workspace", i, None));
+                        }
+                    });
+            }
+
+            // Apply collected updates
+            for action in actions {
+                match action {
+                    ("remove_window", workspace_index, Some(window_id)) => {
+                        if let Some(workspace) = self.workspaces.get_mut(workspace_index) {
+                            workspace.windows.retain(|w| w.id != window_id);
+                        }
                     }
-                });
+                    ("delete_workspace", workspace_index, None) => {
+                        self.workspaces.remove(workspace_index);
+                    }
+                    _ => {}
+                }
             }
-            // Remove workspaces after iteration
-            for &i in indices_to_remove.iter().rev() {
-                self.workspaces.remove(i);
-            }
+
+            ui.separator();
 
             // Save Workspaces Button
             if ui.button("Save Workspaces").clicked() {
