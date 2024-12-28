@@ -4,6 +4,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetForegroundWindow, GetWindowRect, SetWindowPos, HWND_TOP, SWP_NOACTIVATE, SWP_NOZORDER,
 };
 use winit::platform::run_return::EventLoopExtRunReturn;
+use winit::platform::windows::EventLoopBuilderExtWindows;
 
 pub fn get_active_window() -> Option<HWND> {
     unsafe {
@@ -42,10 +43,10 @@ pub fn get_window_position(hwnd: HWND) -> Result<(i32, i32, i32, i32), &'static 
 
 pub fn capture_hotkey_dialog(result: Arc<Mutex<Option<String>>>) {
     use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
-    use winit::event_loop::{ControlFlow, EventLoop};
+    use winit::event_loop::{ControlFlow, EventLoopBuilder};
     use winit::window::WindowBuilder;
 
-    let mut event_loop = EventLoop::new();
+    let mut event_loop = EventLoopBuilder::new().with_any_thread(true).build(); // Make event_loop mutable
     let _window = WindowBuilder::new()
         .with_title("Press keys for hotkey")
         .build(&event_loop)
