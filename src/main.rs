@@ -9,5 +9,4 @@ fn main() {
     };
 
     gui::run_gui(app);
-    // workspace::save_workspaces(&app.workspaces, "workspaces.json");
 }
