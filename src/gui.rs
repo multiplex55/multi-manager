@@ -1,6 +1,6 @@
 use crate::window_manager::{
-    capture_hotkey_dialog, get_active_window, get_window_position, listen_for_keys_with_dialog,
-    move_window, register_hotkey_listener,
+    capture_hotkey_dialog, get_active_window, get_window_position, move_window, register_hotkey,
+    register_hotkey_listener,
 };
 use crate::workspace::{save_workspaces, Window, Workspace};
 use eframe::egui;
@@ -18,7 +18,6 @@ pub struct App {
 }
 
 pub fn run_gui(mut app: App) {
-    // Load workspaces from file
     if let Ok(data) = fs::read_to_string("workspaces.json") {
         if let Ok(workspaces) = serde_json::from_str::<Vec<Workspace>>(&data) {
             app.workspaces = workspaces;
@@ -77,7 +76,10 @@ impl EframeApp for App {
                             }
                             if ui.button("Set Hotkey").clicked() {
                                 if let Some(new_hotkey) = capture_hotkey_dialog() {
-                                    workspace.hotkey = Some(new_hotkey);
+                                    workspace.hotkey = Some(new_hotkey.clone());
+                                    if let Err(err) = register_hotkey(i, &new_hotkey) {
+                                        eprintln!("Failed to register hotkey: {}", err);
+                                    }
                                 }
                             }
                         });
@@ -88,7 +90,7 @@ impl EframeApp for App {
                                 ui.label(&window.title);
                                 if ui.button("Move to Target").clicked() {
                                     move_window(
-                                        HWND(window.id as *mut _),
+                                        HWND(window.id as *mut std::ffi::c_void),
                                         window.target.0,
                                         window.target.1,
                                         window.target.2,
@@ -97,7 +99,7 @@ impl EframeApp for App {
                                 }
                                 if ui.button("Move to Home").clicked() {
                                     move_window(
-                                        HWND(window.id as *mut _),
+                                        HWND(window.id as *mut std::ffi::c_void),
                                         window.home.0,
                                         window.home.1,
                                         window.home.2,
@@ -116,9 +118,9 @@ impl EframeApp for App {
                                 ui.add(egui::DragValue::new(&mut window.home.2).prefix("w: "));
                                 ui.add(egui::DragValue::new(&mut window.home.3).prefix("h: "));
                                 if ui.button("Set Home").clicked() {
-                                    if let Ok((x, y, w, h)) =
-                                        get_window_position(HWND(window.id as *mut _))
-                                    {
+                                    if let Ok((x, y, w, h)) = get_window_position(HWND(
+                                        window.id as *mut std::ffi::c_void,
+                                    )) {
                                         window.home = (x, y, w, h);
                                     }
                                 }
@@ -131,9 +133,9 @@ impl EframeApp for App {
                                 ui.add(egui::DragValue::new(&mut window.target.2).prefix("w: "));
                                 ui.add(egui::DragValue::new(&mut window.target.3).prefix("h: "));
                                 if ui.button("Set Target").clicked() {
-                                    if let Ok((x, y, w, h)) =
-                                        get_window_position(HWND(window.id as *mut _))
-                                    {
+                                    if let Ok((x, y, w, h)) = get_window_position(HWND(
+                                        window.id as *mut std::ffi::c_void,
+                                    )) {
                                         window.target = (x, y, w, h);
                                     }
                                 }
@@ -149,22 +151,15 @@ impl EframeApp for App {
                         }
 
                         if ui.button("Capture Active Window").clicked() {
-                            match listen_for_keys_with_dialog() {
-                                Some("Enter") => {
-                                    if let Some((hwnd, title)) = get_active_window() {
-                                        let new_window = Window {
-                                            id: hwnd.0 as usize,
-                                            title,
-                                            home: (0, 0, 800, 600),
-                                            target: (0, 0, 800, 600),
-                                        };
-                                        workspace.windows.push(new_window);
-                                    }
-                                }
-                                Some("Esc") => {
-                                    ui.label("Window capture canceled.");
-                                }
-                                _ => {}
+                            if let Some(hwnd) = get_active_window() {
+                                let title = format!("Window {:?}", hwnd.0);
+                                let new_window = Window {
+                                    id: hwnd.0 as usize,
+                                    title,
+                                    home: (0, 0, 800, 600),
+                                    target: (0, 0, 800, 600),
+                                };
+                                workspace.windows.push(new_window);
                             }
                         }
                     });
