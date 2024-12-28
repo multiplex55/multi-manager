@@ -1,14 +1,13 @@
 use crate::window_manager::{
-    capture_hotkey_dialog, get_active_window, get_window_position, move_window, register_hotkey,
-    register_hotkey_listener,
+    capture_hotkey_dialog, get_active_window, get_window_position, move_window,
 };
 use crate::workspace::{save_workspaces, Window, Workspace};
 use eframe::egui;
 use eframe::{self, App as EframeApp};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::thread;
 use windows::Win32::Foundation::HWND;
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -23,9 +22,6 @@ pub fn run_gui(mut app: App) {
             app.workspaces = workspaces;
         }
     }
-
-    let shared_app = Arc::new(Mutex::new(app.clone()));
-    register_hotkey_listener(shared_app.clone());
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -42,9 +38,12 @@ impl EframeApp for App {
         let mut workspace_to_delete = None;
         let mut save_workspaces_flag = false;
 
+        let hotkey_capture_result = Arc::new(Mutex::new(None::<String>));
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Multi Manager");
 
+            // Global buttons
             ui.horizontal(|ui| {
                 if ui.button("Save Workspaces").clicked() {
                     save_workspaces_flag = true;
@@ -62,11 +61,13 @@ impl EframeApp for App {
 
             ui.separator();
 
+            // Loop through each workspace
             for (i, workspace) in self.workspaces.iter_mut().enumerate() {
                 egui::CollapsingHeader::new(&workspace.name)
                     .id_salt(i)
                     .default_open(true)
                     .show(ui, |ui| {
+                        // Hotkey settings
                         ui.horizontal(|ui| {
                             ui.label("Hotkey:");
                             if let Some(hotkey) = &workspace.hotkey {
@@ -74,20 +75,27 @@ impl EframeApp for App {
                             } else {
                                 ui.label("None");
                             }
+
+                            // Set Hotkey button
                             if ui.button("Set Hotkey").clicked() {
-                                if let Some(new_hotkey) = capture_hotkey_dialog() {
-                                    workspace.hotkey = Some(new_hotkey.clone());
-                                    if let Err(err) = register_hotkey(i, &new_hotkey) {
-                                        eprintln!("Failed to register hotkey: {}", err);
-                                    }
-                                }
+                                let result = hotkey_capture_result.clone();
+                                std::thread::spawn(move || {
+                                    capture_hotkey_dialog(result);
+                                });
+                            }
+
+                            // Apply captured hotkey
+                            if let Some(hotkey) = hotkey_capture_result.lock().unwrap().take() {
+                                workspace.hotkey = Some(hotkey);
                             }
                         });
 
+                        // Manage windows
                         let mut window_to_delete = None;
                         for (j, window) in workspace.windows.iter_mut().enumerate() {
                             ui.horizontal(|ui| {
                                 ui.label(&window.title);
+
                                 if ui.button("Move to Target").clicked() {
                                     move_window(
                                         HWND(window.id as *mut std::ffi::c_void),
@@ -97,6 +105,7 @@ impl EframeApp for App {
                                         window.target.3,
                                     );
                                 }
+
                                 if ui.button("Move to Home").clicked() {
                                     move_window(
                                         HWND(window.id as *mut std::ffi::c_void),
@@ -106,11 +115,13 @@ impl EframeApp for App {
                                         window.home.3,
                                     );
                                 }
+
                                 if ui.button("Delete").clicked() {
                                     window_to_delete = Some(j);
                                 }
                             });
 
+                            // Home and Target settings
                             ui.horizontal(|ui| {
                                 ui.label("Home:");
                                 ui.add(egui::DragValue::new(&mut window.home.0).prefix("x: "));
@@ -146,10 +157,6 @@ impl EframeApp for App {
                             workspace.windows.remove(index);
                         }
 
-                        if ui.button("Delete Workspace").clicked() {
-                            workspace_to_delete = Some(i);
-                        }
-
                         if ui.button("Capture Active Window").clicked() {
                             if let Some(hwnd) = get_active_window() {
                                 let title = format!("Window {:?}", hwnd.0);
@@ -161,6 +168,10 @@ impl EframeApp for App {
                                 };
                                 workspace.windows.push(new_window);
                             }
+                        }
+
+                        if ui.button("Delete Workspace").clicked() {
+                            workspace_to_delete = Some(i);
                         }
                     });
             }

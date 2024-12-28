@@ -1,14 +1,9 @@
 use std::sync::{Arc, Mutex};
 use windows::Win32::Foundation::{HWND, RECT};
-use windows::Win32::UI::Input::KeyboardAndMouse::{
-    RegisterHotKey, UnregisterHotKey, MOD_CONTROL, MOD_SHIFT, VK_H,
-};
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetForegroundWindow, GetWindowRect, PeekMessageW, SetWindowPos, HWND_TOP, MSG,
-    PEEK_MESSAGE_REMOVE_TYPE, SWP_NOACTIVATE, SWP_NOZORDER, WM_HOTKEY,
+    GetForegroundWindow, GetWindowRect, SetWindowPos, HWND_TOP, SWP_NOACTIVATE, SWP_NOZORDER,
 };
-
-use crate::gui::App;
+use winit::platform::run_return::EventLoopExtRunReturn;
 
 pub fn get_active_window() -> Option<HWND> {
     unsafe {
@@ -21,9 +16,12 @@ pub fn get_active_window() -> Option<HWND> {
     }
 }
 
-pub fn move_window(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) {
+pub fn move_window(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) -> Result<(), &'static str> {
     unsafe {
-        SetWindowPos(hwnd, HWND_TOP, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+        match SetWindowPos(hwnd, HWND_TOP, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE) {
+            Ok(_) => Ok(()),
+            Err(_) => Err("Failed to move window."),
+        }
     }
 }
 
@@ -42,57 +40,72 @@ pub fn get_window_position(hwnd: HWND) -> Result<(i32, i32, i32, i32), &'static 
     }
 }
 
-pub fn capture_hotkey_dialog() -> Option<String> {
-    println!("Press Ctrl+Shift+H to register hotkey.");
-    Some("Ctrl+Shift+H".to_string()) // Placeholder
-}
+pub fn capture_hotkey_dialog(result: Arc<Mutex<Option<String>>>) {
+    use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
+    use winit::event_loop::{ControlFlow, EventLoop};
+    use winit::window::WindowBuilder;
 
-pub fn register_hotkey(workspace_id: usize, hotkey: &str) -> Result<(), &'static str> {
-    let modifiers = MOD_CONTROL | MOD_SHIFT; // Use the modifiers directly
-    let key = VK_H.0.into(); // Convert VK_H to the expected type
+    let mut event_loop = EventLoop::new();
+    let _window = WindowBuilder::new()
+        .with_title("Press keys for hotkey")
+        .build(&event_loop)
+        .expect("Failed to create window");
 
-    unsafe {
-        if RegisterHotKey(HWND::default(), workspace_id as i32, modifiers, key).is_ok() {
-            Ok(())
-        } else {
-            Err("Failed to register hotkey")
-        }
-    }
-}
+    let mut hotkey_parts = Vec::new();
 
-pub fn unregister_hotkey(workspace_id: usize) {
-    unsafe {
-        UnregisterHotKey(HWND::default(), workspace_id as i32);
-    }
-}
+    event_loop.run_return(|event, _, control_flow| {
+        *control_flow = ControlFlow::Wait;
 
-pub fn register_hotkey_listener(app: Arc<Mutex<App>>) {
-    std::thread::spawn(move || {
-        let mut msg = MSG::default();
-
-        loop {
-            unsafe {
-                if PeekMessageW(&mut msg, HWND::default(), 0, 0, PEEK_MESSAGE_REMOVE_TYPE(1))
-                    .as_bool()
-                    && msg.message == WM_HOTKEY
-                {
-                    let workspace_id = msg.wParam.0 as usize;
-
-                    let app = app.lock().unwrap();
-                    if let Some(workspace) = app.workspaces.get(workspace_id) {
-                        for window in &workspace.windows {
-                            let hwnd = HWND(window.id as *mut std::ffi::c_void);
-                            move_window(
-                                hwnd,
-                                window.target.0,
-                                window.target.1,
-                                window.target.2,
-                                window.target.3,
-                            );
-                        }
+        match event {
+            Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } => {
+                *control_flow = ControlFlow::Exit;
+            }
+            Event::WindowEvent {
+                event:
+                    WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(key),
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            } => match key {
+                VirtualKeyCode::LControl | VirtualKeyCode::RControl => {
+                    if !hotkey_parts.contains(&"Ctrl".to_string()) {
+                        hotkey_parts.push("Ctrl".to_string());
                     }
                 }
-            }
+                VirtualKeyCode::LShift | VirtualKeyCode::RShift => {
+                    if !hotkey_parts.contains(&"Shift".to_string()) {
+                        hotkey_parts.push("Shift".to_string());
+                    }
+                }
+                VirtualKeyCode::LAlt | VirtualKeyCode::RAlt => {
+                    if !hotkey_parts.contains(&"Alt".to_string()) {
+                        hotkey_parts.push("Alt".to_string());
+                    }
+                }
+                VirtualKeyCode::LWin | VirtualKeyCode::RWin => {
+                    if !hotkey_parts.contains(&"Win".to_string()) {
+                        hotkey_parts.push("Win".to_string());
+                    }
+                }
+                key => {
+                    let key_string = format!("{:?}", key);
+                    if !hotkey_parts.contains(&key_string) {
+                        hotkey_parts.push(key_string);
+                    }
+                    *result.lock().unwrap() = Some(hotkey_parts.join("+"));
+                    *control_flow = ControlFlow::Exit;
+                }
+            },
+            _ => {}
         }
     });
 }
