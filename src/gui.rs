@@ -1,7 +1,4 @@
-use crate::window_manager::{
-    get_active_window, handle_hotkey_events, listen_for_keys_with_dialog, move_window,
-    register_hotkey,
-};
+use crate::window_manager::*;
 use crate::workspace::{load_workspaces, save_workspaces, Window, Workspace};
 use eframe::egui;
 use eframe::{self, App as EframeApp};
@@ -83,13 +80,16 @@ impl EframeApp for App {
                             }
 
                             if ui.button("Set Hotkey").clicked() {
+                                if let Some(_) = &workspace.hotkey {
+                                    unregister_hotkey(i as i32);
+                                }
                                 workspace.hotkey = Some("Ctrl+Alt+H".to_string());
-                                register_hotkey(i as i32, workspace.hotkey.as_ref().unwrap());
-                                info!(
-                                    "Set hotkey for workspace '{}': {}",
-                                    workspace.name,
-                                    workspace.hotkey.as_ref().unwrap()
-                                );
+                                if !register_hotkey(i as i32, workspace.hotkey.as_ref().unwrap()) {
+                                    warn!(
+                                        "Failed to set hotkey for workspace '{}'.",
+                                        workspace.name
+                                    );
+                                }
                             }
                         });
 

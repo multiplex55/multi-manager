@@ -33,7 +33,7 @@ pub fn register_hotkey(id: i32, key_sequence: &str) -> bool {
             if RegisterHotKey(None, id, HOT_KEY_MODIFIERS(modifiers), vk).is_ok() {
                 let mut hotkeys = HOTKEYS.lock().unwrap();
                 hotkeys.insert(id, id as usize);
-                info!("Registered hotkey '{}' with id {}.", key_sequence, id);
+                info!("Registered hotkey '{}' with ID {}.", key_sequence, id);
                 return true;
             } else {
                 error!("Failed to register hotkey: '{}'.", key_sequence);
@@ -46,19 +46,20 @@ pub fn register_hotkey(id: i32, key_sequence: &str) -> bool {
     false
 }
 
-// Unregisters all global hotkeys
-pub fn unregister_hotkeys() {
+// Unregisters a global hotkey
+pub fn unregister_hotkey(id: i32) {
     unsafe {
-        let mut hotkeys = HOTKEYS.lock().unwrap();
-        for id in hotkeys.keys() {
-            UnregisterHotKey(None, *id);
-            info!("Unregistered hotkey with id {}.", id);
+        if let Ok(_) = UnregisterHotKey(None, id) {
+            let mut hotkeys = HOTKEYS.lock().unwrap();
+            hotkeys.remove(&id);
+            info!("Unregistered hotkey with ID {}.", id);
+        } else {
+            warn!("Failed to unregister hotkey with ID {}.", id);
         }
-        hotkeys.clear();
     }
 }
 
-// Handles global hotkey events and displays a message box when a hotkey matches a workspace
+// Handles global hotkey events and toggles workspace windows
 pub fn handle_hotkey_events(workspaces: Arc<Mutex<Vec<Workspace>>>) {
     unsafe {
         let mut msg = MSG::default();
@@ -67,19 +68,75 @@ pub fn handle_hotkey_events(workspaces: Arc<Mutex<Vec<Workspace>>>) {
                 let hotkey_id = msg.wParam.0 as i32;
                 let hotkeys = HOTKEYS.lock().unwrap();
                 if let Some(workspace_id) = hotkeys.get(&hotkey_id) {
-                    let workspaces = workspaces.lock().unwrap();
-                    if let Some(workspace) = workspaces.get(*workspace_id) {
-                        display_message_box(&workspace.name);
-                        info!("Hotkey triggered for workspace: '{}'.", workspace.name);
+                    let mut workspaces = workspaces.lock().unwrap();
+                    if let Some(workspace) = workspaces.get_mut(*workspace_id) {
+                        toggle_workspace_windows(workspace);
+                        info!("Activated workspace: '{}'.", workspace.name);
                     } else {
-                        warn!("Workspace id '{}' not found.", workspace_id);
+                        warn!("Workspace ID '{}' not found.", workspace_id);
                     }
                 } else {
-                    warn!("Hotkey id '{}' not registered.", hotkey_id);
+                    warn!("Hotkey ID '{}' not registered.", hotkey_id);
                 }
             }
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
+        }
+    }
+}
+
+// Toggles workspace windows between home and target
+fn toggle_workspace_windows(workspace: &mut Workspace) {
+    let all_at_home = workspace.windows.iter().all(|w| {
+        is_window_at_position(
+            HWND(w.id as *mut std::ffi::c_void),
+            w.home.0,
+            w.home.1,
+            w.home.2,
+            w.home.3,
+        )
+    });
+
+    for window in &workspace.windows {
+        let target_position = if all_at_home {
+            window.target
+        } else {
+            window.home
+        };
+        if let Err(e) = move_window(
+            HWND(window.id as *mut std::ffi::c_void),
+            target_position.0,
+            target_position.1,
+            target_position.2,
+            target_position.3,
+        ) {
+            warn!("Failed to move window '{}': {}", window.title, e);
+        }
+    }
+}
+
+// Checks if a window is at the specified position
+fn is_window_at_position(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) -> bool {
+    if let Ok((wx, wy, ww, wh)) = get_window_position(hwnd) {
+        wx == x && wy == y && ww == w && wh == h
+    } else {
+        false
+    }
+}
+
+// Retrieves the current position and size of a window
+fn get_window_position(hwnd: HWND) -> Result<(i32, i32, i32, i32)> {
+    unsafe {
+        let mut rect = RECT::default();
+        if GetWindowRect(hwnd, &mut rect).is_ok() {
+            Ok((
+                rect.left,
+                rect.top,
+                rect.right - rect.left,
+                rect.bottom - rect.top,
+            ))
+        } else {
+            Err(windows::core::Error::from_win32())
         }
     }
 }
@@ -136,7 +193,6 @@ fn virtual_key_from_string(key: &str) -> Option<u32> {
         "F22" => Some(0x85),
         "F23" => Some(0x86),
         "F24" => Some(0x87),
-
         // Alphabet keys
         "A" => Some(0x41),
         "B" => Some(0x42),
@@ -188,7 +244,7 @@ pub fn get_active_window() -> Option<(HWND, String)> {
 // Moves a window to a specific position and size
 pub fn move_window(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) -> Result<()> {
     unsafe {
-        SetWindowPos(hwnd, HWND_TOP, x, y, w, h, SWP_NOZORDER)?; //SWP_NOACTIVATE
+        SetWindowPos(hwnd, HWND_TOP, x, y, w, h, SWP_NOZORDER)?;
         info!(
             "Moved window (HWND: {:?}) to position ({}, {}, {}, {}).",
             hwnd.0, x, y, w, h
