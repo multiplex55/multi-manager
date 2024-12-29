@@ -7,9 +7,10 @@ use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
+// Static hotkeys map
 static HOTKEYS: Lazy<Mutex<HashMap<i32, usize>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
-/// Registers a global hotkey for a workspace.
+// Registers a global hotkey for a workspace
 pub fn register_hotkey(id: i32, key_sequence: &str) -> bool {
     let mut modifiers: u32 = 0;
     let mut vk_code: Option<u32> = None;
@@ -30,7 +31,7 @@ pub fn register_hotkey(id: i32, key_sequence: &str) -> bool {
         unsafe {
             if RegisterHotKey(None, id, HOT_KEY_MODIFIERS(modifiers), vk).is_ok() {
                 let mut hotkeys = HOTKEYS.lock().unwrap();
-                hotkeys.insert(id, vk as usize);
+                hotkeys.insert(id, id as usize);
                 return true;
             }
         }
@@ -40,7 +41,7 @@ pub fn register_hotkey(id: i32, key_sequence: &str) -> bool {
     false
 }
 
-/// Unregisters all global hotkeys.
+// Unregisters all global hotkeys
 pub fn unregister_hotkeys() {
     unsafe {
         let mut hotkeys = HOTKEYS.lock().unwrap();
@@ -51,7 +52,7 @@ pub fn unregister_hotkeys() {
     }
 }
 
-/// Handles global hotkey events and toggles workspace windows.
+// Handles global hotkey events and displays a message box when a hotkey matches a workspace
 pub fn handle_hotkey_events(workspaces: Arc<Mutex<Vec<Workspace>>>) {
     unsafe {
         let mut msg = MSG::default();
@@ -60,9 +61,9 @@ pub fn handle_hotkey_events(workspaces: Arc<Mutex<Vec<Workspace>>>) {
                 let hotkey_id = msg.wParam.0 as i32;
                 let hotkeys = HOTKEYS.lock().unwrap();
                 if let Some(workspace_id) = hotkeys.get(&hotkey_id) {
-                    let mut workspaces = workspaces.lock().unwrap();
-                    if let Some(workspace) = workspaces.get_mut(*workspace_id) {
-                        toggle_workspace_windows(workspace);
+                    let workspaces = workspaces.lock().unwrap();
+                    if let Some(workspace) = workspaces.get(*workspace_id) {
+                        display_message_box(&workspace.name);
                     }
                 }
             }
@@ -72,91 +73,20 @@ pub fn handle_hotkey_events(workspaces: Arc<Mutex<Vec<Workspace>>>) {
     }
 }
 
-/// Toggles the windows in a workspace between their home and target positions.
-fn toggle_workspace_windows(workspace: &mut Workspace) {
-    let all_at_home = workspace
-        .windows
-        .iter()
-        .all(|w| is_window_at_position(w.id, w.home));
-
-    for window in &workspace.windows {
-        let position = if all_at_home {
-            window.target
-        } else {
-            window.home
-        };
-        if let Err(e) = move_window(
-            HWND(window.id as *mut std::ffi::c_void),
-            position.0,
-            position.1,
-            position.2,
-            position.3,
-        ) {
-            eprintln!("Error moving window {}: {}", window.title, e);
-        }
-    }
-}
-
-/// Moves a window to a specific position and size.
-pub fn move_window(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) -> Result<()> {
+// Displays a message box with the workspace name
+fn display_message_box(workspace_name: &str) {
     unsafe {
-        SetWindowPos(hwnd, HWND_TOP, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE)?;
-        Ok(())
-    }
-}
-
-/// Checks if a window is currently at a specific position and size.
-pub fn is_window_at_position(window_id: usize, position: (i32, i32, i32, i32)) -> bool {
-    if let Ok((x, y, w, h)) = get_window_position(HWND(window_id as *mut std::ffi::c_void)) {
-        x == position.0 && y == position.1 && w == position.2 && h == position.3
-    } else {
-        false
-    }
-}
-
-/// Retrieves the position and size of a window.
-pub fn get_window_position(hwnd: HWND) -> Result<(i32, i32, i32, i32)> {
-    unsafe {
-        let mut rect = RECT::default();
-        GetWindowRect(hwnd, &mut rect)?;
-        Ok((
-            rect.left,
-            rect.top,
-            rect.right - rect.left,
-            rect.bottom - rect.top,
-        ))
-    }
-}
-
-/// Retrieves the currently active window and its title.
-pub fn get_active_window() -> Option<(HWND, String)> {
-    unsafe {
-        let hwnd = GetForegroundWindow();
-        if hwnd.0.is_null() {
-            None
-        } else {
-            let mut buffer = [0u16; 256];
-            let length = GetWindowTextW(hwnd, &mut buffer);
-            let title = String::from_utf16_lossy(&buffer[..length as usize]);
-            Some((hwnd, title))
-        }
-    }
-}
-
-pub fn listen_for_keys_with_dialog() -> Option<&'static str> {
-    unsafe {
-        let message = "Press Enter to confirm or Escape to cancel.";
         MessageBoxW(
             None,
             PCWSTR(
-                message
+                format!("Workspace triggered: {}", workspace_name)
                     .encode_utf16()
                     .chain(Some(0))
                     .collect::<Vec<_>>()
                     .as_ptr(),
             ),
             PCWSTR(
-                "Action Required"
+                "Workspace Hotkey"
                     .encode_utf16()
                     .chain(Some(0))
                     .collect::<Vec<_>>()
@@ -164,37 +94,10 @@ pub fn listen_for_keys_with_dialog() -> Option<&'static str> {
             ),
             MB_OK | MB_ICONINFORMATION,
         );
-
-        loop {
-            if GetAsyncKeyState(VK_RETURN.0 as i32) < 0 {
-                return Some("Enter");
-            }
-            if GetAsyncKeyState(VK_ESCAPE.0 as i32) < 0 {
-                MessageBoxW(
-                    None,
-                    PCWSTR(
-                        "Action canceled by user."
-                            .encode_utf16()
-                            .chain(Some(0))
-                            .collect::<Vec<_>>()
-                            .as_ptr(),
-                    ),
-                    PCWSTR(
-                        "Canceled"
-                            .encode_utf16()
-                            .chain(Some(0))
-                            .collect::<Vec<_>>()
-                            .as_ptr(),
-                    ),
-                    MB_OK | MB_ICONWARNING,
-                );
-                return Some("Esc");
-            }
-        }
     }
 }
 
-/// Converts a string to a virtual key code.
+// Converts a string to a virtual key code
 fn virtual_key_from_string(key: &str) -> Option<u32> {
     match key.to_uppercase().as_str() {
         // Function keys
@@ -250,66 +153,63 @@ fn virtual_key_from_string(key: &str) -> Option<u32> {
         "X" => Some(0x58),
         "Y" => Some(0x59),
         "Z" => Some(0x5A),
-
-        // Numeric keys
-        "0" => Some(0x30),
-        "1" => Some(0x31),
-        "2" => Some(0x32),
-        "3" => Some(0x33),
-        "4" => Some(0x34),
-        "5" => Some(0x35),
-        "6" => Some(0x36),
-        "7" => Some(0x37),
-        "8" => Some(0x38),
-        "9" => Some(0x39),
-
-        // Numpad keys
-        "NUMPAD0" => Some(0x60),
-        "NUMPAD1" => Some(0x61),
-        "NUMPAD2" => Some(0x62),
-        "NUMPAD3" => Some(0x63),
-        "NUMPAD4" => Some(0x64),
-        "NUMPAD5" => Some(0x65),
-        "NUMPAD6" => Some(0x66),
-        "NUMPAD7" => Some(0x67),
-        "NUMPAD8" => Some(0x68),
-        "NUMPAD9" => Some(0x69),
-        "NUMPAD_ADD" => Some(0x6B),
-        "NUMPAD_SUBTRACT" => Some(0x6D),
-        "NUMPAD_MULTIPLY" => Some(0x6A),
-        "NUMPAD_DIVIDE" => Some(0x6F),
-        "NUMPAD_DECIMAL" => Some(0x6E),
-
-        // Special keys
-        "ESCAPE" => Some(0x1B),
-        "ENTER" => Some(0x0D),
-        "TAB" => Some(0x09),
-        "SPACE" => Some(0x20),
-        "BACKSPACE" => Some(0x08),
-        "DELETE" => Some(0x2E),
-        "INSERT" => Some(0x2D),
-        "HOME" => Some(0x24),
-        "END" => Some(0x23),
-        "PAGE_UP" => Some(0x21),
-        "PAGE_DOWN" => Some(0x22),
-        "ARROW_UP" => Some(0x26),
-        "ARROW_DOWN" => Some(0x28),
-        "ARROW_LEFT" => Some(0x25),
-        "ARROW_RIGHT" => Some(0x27),
-
-        // Symbols
-        "GRAVE" => Some(0xC0),         // `
-        "MINUS" => Some(0xBD),         // -
-        "EQUALS" => Some(0xBB),        // =
-        "LEFT_BRACKET" => Some(0xDB),  // [
-        "RIGHT_BRACKET" => Some(0xDD), // ]
-        "BACKSLASH" => Some(0xDC),     // \
-        "SEMICOLON" => Some(0xBA),     // ;
-        "APOSTROPHE" => Some(0xDE),    // '
-        "COMMA" => Some(0xBC),         // ,
-        "PERIOD" => Some(0xBE),        // .
-        "SLASH" => Some(0xBF),         // /
-
         _ => None,
+    }
+}
+
+// Retrieves the currently active window and its title
+pub fn get_active_window() -> Option<(HWND, String)> {
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.0.is_null() {
+            None
+        } else {
+            let mut buffer = [0u16; 256];
+            let length = GetWindowTextW(hwnd, &mut buffer);
+            let title = String::from_utf16_lossy(&buffer[..length as usize]);
+            Some((hwnd, title))
+        }
+    }
+}
+
+// Moves a window to a specific position and size
+pub fn move_window(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) -> Result<()> {
+    unsafe {
+        SetWindowPos(hwnd, HWND_TOP, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE)?;
+        Ok(())
+    }
+}
+
+// Listens for key input to confirm or cancel an action
+pub fn listen_for_keys_with_dialog() -> Option<&'static str> {
+    unsafe {
+        let message = "Press Enter to confirm or Escape to cancel.";
+        MessageBoxW(
+            None,
+            PCWSTR(
+                message
+                    .encode_utf16()
+                    .chain(Some(0))
+                    .collect::<Vec<_>>()
+                    .as_ptr(),
+            ),
+            PCWSTR(
+                "Action Required"
+                    .encode_utf16()
+                    .chain(Some(0))
+                    .collect::<Vec<_>>()
+                    .as_ptr(),
+            ),
+            MB_OK | MB_ICONINFORMATION,
+        );
+
+        loop {
+            if GetAsyncKeyState(VK_RETURN.0 as i32) < 0 {
+                return Some("Enter");
+            }
+            if GetAsyncKeyState(VK_ESCAPE.0 as i32) < 0 {
+                return Some("Esc");
+            }
+        }
     }
 }
