@@ -55,6 +55,9 @@ impl EframeApp for App {
                         workspace.name, hotkey
                     );
                     toggle_workspace_windows(workspace);
+
+                    // Delay for 500 milliseconds to prevent overlapping actions
+                    std::thread::sleep(std::time::Duration::from_millis(250));
                 }
             }
         }
