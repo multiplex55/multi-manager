@@ -3,6 +3,7 @@ mod window_manager;
 mod workspace;
 
 use log::info;
+use window_manager::listen_for_keyboard_event;
 
 use std::env;
 use std::sync::{Arc, Mutex};
@@ -13,6 +14,9 @@ fn main() {
     env::set_var("RUST_BACKTRACE", "1");
 
     info!("Starting Multi Manager application...");
+
+    // Uncomment this line to test keyboard event listener
+    listen_for_keyboard_event("Ctrl+H");
 
     let app = gui::App {
         workspaces: Vec::new(),

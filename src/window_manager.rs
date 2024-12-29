@@ -85,6 +85,98 @@ pub fn handle_hotkey_events(workspaces: Arc<Mutex<Vec<Workspace>>>) {
     }
 }
 
+// Listens for low-level keyboard events
+pub fn listen_for_keyboard_event(key_sequence: &str) -> Option<()> {
+    info!(
+        "Initializing listen_for_keyboard_event with key sequence: '{}'",
+        key_sequence
+    );
+
+    // Parse the key sequence into modifiers and virtual key code
+    let mut modifiers: u32 = 0;
+    let mut vk_code: Option<u32> = None;
+
+    for part in key_sequence.split('+') {
+        match part.to_lowercase().as_str() {
+            "ctrl" => modifiers |= MOD_CONTROL.0,
+            "alt" => modifiers |= MOD_ALT.0,
+            "shift" => modifiers |= MOD_SHIFT.0,
+            "win" => modifiers |= MOD_WIN.0,
+            _ => {
+                vk_code = virtual_key_from_string(part);
+                match vk_code {
+                    Some(code) => info!("Detected virtual key: '{}' -> code {}", part, code),
+                    None => warn!("Failed to parse virtual key from part: '{}'", part),
+                }
+            }
+        }
+    }
+
+    if vk_code.is_none() {
+        error!("No valid virtual key code detected. Aborting listener setup.");
+        return None;
+    }
+
+    let vk = vk_code.unwrap();
+    info!(
+        "Final parsed key sequence: modifiers={:#X}, vk_code={:#X}",
+        modifiers, vk
+    );
+
+    unsafe {
+        // Register the hotkey
+        // Register the hotkey
+        if RegisterHotKey(None, 1, HOT_KEY_MODIFIERS(modifiers), vk).is_err() {
+            error!(
+                "Failed to register hotkey for key sequence '{}'.",
+                key_sequence
+            );
+            return None;
+        }
+        info!("Hotkey successfully registered for '{}'.", key_sequence);
+
+        let mut msg = MSG::default();
+        info!(
+            "Entering message loop to listen for key sequence: '{}'",
+            key_sequence
+        );
+
+        while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+            if msg.message == WM_HOTKEY {
+                info!("WM_HOTKEY message received: msg.lParam={:#X}", msg.lParam.0);
+
+                MessageBoxW(
+                    None,
+                    PCWSTR(
+                        "Keyboard sequence detected!"
+                            .encode_utf16()
+                            .chain(Some(0))
+                            .collect::<Vec<_>>()
+                            .as_ptr(),
+                    ),
+                    PCWSTR(
+                        "Hotkey Triggered"
+                            .encode_utf16()
+                            .chain(Some(0))
+                            .collect::<Vec<_>>()
+                            .as_ptr(),
+                    ),
+                    MB_OK | MB_ICONINFORMATION,
+                );
+
+                // Unregister the hotkey and return after detecting
+                UnregisterHotKey(None, 1);
+                info!("Hotkey unregistered after triggering.");
+                return Some(());
+            }
+        }
+
+        error!("Exited message loop unexpectedly.");
+    }
+
+    None
+}
+
 // Toggles workspace windows between home and target
 fn toggle_workspace_windows(workspace: &mut Workspace) {
     let all_at_home = workspace.windows.iter().all(|w| {
