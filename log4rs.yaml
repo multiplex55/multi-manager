@@ -2,6 +2,7 @@ appenders:
   file:
     kind: file
     path: "multi_manager.log"
+    append: false # Overwrite the logfile on each program run
     encoder:
       pattern: "{d} - {l} - {m}{n}"
 

@@ -18,24 +18,25 @@ pub struct Window {
     pub target: (i32, i32, i32, i32),
 }
 
-/// Saves workspaces to a JSON file.
+/// Saves the current workspaces to a file in JSON format.
 pub fn save_workspaces(workspaces: &[Workspace], file_path: &str) {
     match serde_json::to_string(workspaces) {
-        Ok(json) => match File::create(file_path) {
-            Ok(mut file) => {
-                if let Err(e) = file.write_all(json.as_bytes()) {
-                    error!("Failed to write workspaces to file '{}': {}", file_path, e);
-                } else {
-                    info!("Workspaces successfully saved to '{}'.", file_path);
-                }
+        Ok(json) => {
+            if let Err(e) =
+                File::create(file_path).and_then(|mut file| file.write_all(json.as_bytes()))
+            {
+                error!("Failed to save workspaces to '{}': {}", file_path, e);
+            } else {
+                info!("Workspaces successfully saved to '{}'.", file_path);
             }
-            Err(e) => error!("Failed to create file '{}': {}", file_path, e),
-        },
-        Err(e) => error!("Failed to serialize workspaces: {}", e),
+        }
+        Err(e) => {
+            error!("Failed to serialize workspaces: {}", e);
+        }
     }
 }
 
-/// Loads workspaces from a JSON file.
+/// Loads workspaces from a JSON file. Returns an empty vector if the file does not exist or cannot be read.
 pub fn load_workspaces(file_path: &str) -> Vec<Workspace> {
     let mut content = String::new();
     match File::open(file_path) {
@@ -44,25 +45,24 @@ pub fn load_workspaces(file_path: &str) -> Vec<Workspace> {
                 error!("Failed to read file '{}': {}", file_path, e);
                 return Vec::new();
             }
-
             match serde_json::from_str(&content) {
                 Ok(workspaces) => {
                     info!("Successfully loaded workspaces from '{}'.", file_path);
                     workspaces
                 }
                 Err(e) => {
-                    error!(
-                        "Failed to deserialize workspaces from '{}': {}",
+                    warn!(
+                        "Failed to parse JSON in '{}': {}. Returning empty workspace list.",
                         file_path, e
                     );
                     Vec::new()
                 }
             }
         }
-        Err(_) => {
+        Err(e) => {
             warn!(
-                "File '{}' not found. Returning an empty workspace list.",
-                file_path
+                "File '{}' not found or cannot be opened: {}. Returning empty workspace list.",
+                file_path, e
             );
             Vec::new()
         }
