@@ -1,7 +1,7 @@
 use crate::window_manager::{
     get_active_window, get_window_position, listen_for_keys_with_dialog, move_window,
 };
-use crate::workspace::{save_workspaces, Window, Workspace};
+use crate::workspace::{load_workspaces, save_workspaces, Window, Workspace};
 use eframe::egui;
 use eframe::{self, App as EframeApp};
 use serde::{Deserialize, Serialize};
@@ -15,11 +15,7 @@ pub struct App {
 }
 
 pub fn run_gui(mut app: App) {
-    if let Ok(data) = fs::read_to_string("workspaces.json") {
-        if let Ok(workspaces) = serde_json::from_str::<Vec<Workspace>>(&data) {
-            app.workspaces = workspaces;
-        }
-    }
+    app.workspaces = load_workspaces("workspaces.json");
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -87,23 +83,27 @@ impl EframeApp for App {
                                 ui.label(&window.title);
 
                                 if ui.button("Move to Target").clicked() {
-                                    move_window(
+                                    if let Err(e) = move_window(
                                         HWND(window.id as *mut std::ffi::c_void),
                                         window.target.0,
                                         window.target.1,
                                         window.target.2,
                                         window.target.3,
-                                    );
+                                    ) {
+                                        ui.label(format!("Error: {}", e));
+                                    }
                                 }
 
                                 if ui.button("Move to Home").clicked() {
-                                    move_window(
+                                    if let Err(e) = move_window(
                                         HWND(window.id as *mut std::ffi::c_void),
                                         window.home.0,
                                         window.home.1,
                                         window.home.2,
                                         window.home.3,
-                                    );
+                                    ) {
+                                        ui.label(format!("Error: {}", e));
+                                    }
                                 }
 
                                 if ui.button("Delete").clicked() {
