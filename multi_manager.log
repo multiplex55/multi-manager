@@ -1,19 +1,15 @@
-2024-12-29T15:52:20.052688400-05:00 - INFO - Starting Multi Manager application...
-2024-12-29T15:52:20.053243600-05:00 - INFO - Successfully loaded workspaces from 'workspaces.json'.
-2024-12-29T15:52:20.053310300-05:00 - INFO - Started hotkey event listener thread.
-2024-12-29T15:52:23.544584300-05:00 - INFO - Moved window (HWND: 0x2010be) to position (2400, 0, 800, 600).
-2024-12-29T15:52:23.999672800-05:00 - INFO - Moved window (HWND: 0x2010be) to position (0, 0, 800, 600).
-2024-12-29T15:52:24.417830700-05:00 - INFO - Moved window (HWND: 0x2010be) to position (2400, 0, 800, 600).
-2024-12-29T15:52:24.867764100-05:00 - INFO - Moved window (HWND: 0x2010be) to position (0, 0, 800, 600).
-2024-12-29T15:52:25.318856100-05:00 - INFO - Moved window (HWND: 0x2010be) to position (2400, 0, 800, 600).
-2024-12-29T15:52:26.214475300-05:00 - INFO - Moved window (HWND: 0x2010be) to position (0, 0, 800, 600).
-2024-12-29T15:52:26.562183700-05:00 - INFO - Moved window (HWND: 0x2010be) to position (2400, 0, 800, 600).
-2024-12-29T15:52:27.176038600-05:00 - WARN - Failed to unregister hotkey with ID 0.
-2024-12-29T15:52:27.176085900-05:00 - INFO - Registered hotkey 'Ctrl+Alt+H' with ID 0.
-2024-12-29T15:52:27.795856800-05:00 - INFO - Unregistered hotkey with ID 0.
-2024-12-29T15:52:27.795884600-05:00 - INFO - Registered hotkey 'Ctrl+Alt+H' with ID 0.
-2024-12-29T15:52:27.979756-05:00 - INFO - Unregistered hotkey with ID 0.
-2024-12-29T15:52:27.979784900-05:00 - INFO - Registered hotkey 'Ctrl+Alt+H' with ID 0.
-2024-12-29T15:52:40.654592700-05:00 - INFO - Unregistered hotkey with ID 0.
-2024-12-29T15:52:40.654615500-05:00 - INFO - Registered hotkey 'Ctrl+Alt+H' with ID 0.
-2024-12-29T15:52:47.539796700-05:00 - INFO - Moved window (HWND: 0x2010be) to position (2400, 0, 800, 600).
+2024-12-29T17:34:35.294848700-05:00 - INFO - Starting Multi Manager application...
+2024-12-29T17:34:35.295079800-05:00 - INFO - Initializing listen_for_keyboard_event with key sequence: 'Ctrl+H'
+2024-12-29T17:34:35.295089400-05:00 - INFO - Detected virtual key: 'H' -> code 72
+2024-12-29T17:34:35.295092-05:00 - INFO - Final parsed key sequence: modifiers=0x2, vk_code=0x48
+2024-12-29T17:34:35.295099300-05:00 - INFO - Hotkey successfully registered for 'Ctrl+H'.
+2024-12-29T17:34:35.295103600-05:00 - INFO - Entering message loop to listen for key sequence: 'Ctrl+H'
+2024-12-29T17:34:40.849521300-05:00 - INFO - WM_HOTKEY message received: msg.lParam=0x480002
+2024-12-29T17:34:45.241762-05:00 - INFO - Hotkey unregistered after triggering.
+2024-12-29T17:34:45.241882500-05:00 - INFO - Successfully loaded workspaces from 'workspaces.json'.
+2024-12-29T17:34:45.241935400-05:00 - INFO - Started hotkey event listener thread.
+2024-12-29T17:34:56.731083700-05:00 - WARN - Failed to unregister hotkey with ID 0.
+2024-12-29T17:34:56.731110800-05:00 - INFO - Registered hotkey 'Ctrl+Alt+H' with ID 0.
+2024-12-29T17:35:12.676450600-05:00 - INFO - Unregistered hotkey with ID 0.
+2024-12-29T17:35:12.676483600-05:00 - INFO - Registered hotkey 'Ctrl+Alt+H' with ID 0.
+2024-12-29T17:35:17.286854100-05:00 - INFO - GUI initialized.

@@ -16,7 +16,7 @@ fn main() {
     info!("Starting Multi Manager application...");
 
     // Uncomment this line to test keyboard event listener
-    listen_for_keyboard_event("Ctrl+H");
+    // listen_for_keyboard_event("Ctrl+H");
 
     let app = gui::App {
         workspaces: Vec::new(),

@@ -10,6 +10,8 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 // Static hotkeys map
 static HOTKEYS: Lazy<Mutex<HashMap<i32, usize>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+// Static map to track pressed hotkeys
+static HOTKEY_PRESSED: Lazy<Mutex<Option<i32>>> = Lazy::new(|| Mutex::new(None));
 
 // Registers a global hotkey for a workspace
 pub fn register_hotkey(id: i32, key_sequence: &str) -> bool {
@@ -178,7 +180,7 @@ pub fn listen_for_keyboard_event(key_sequence: &str) -> Option<()> {
 }
 
 // Toggles workspace windows between home and target
-fn toggle_workspace_windows(workspace: &mut Workspace) {
+pub fn toggle_workspace_windows(workspace: &mut Workspace) {
     let all_at_home = workspace.windows.iter().all(|w| {
         is_window_at_position(
             HWND(w.id as *mut std::ffi::c_void),
@@ -379,4 +381,12 @@ pub fn listen_for_keys_with_dialog() -> Option<&'static str> {
             }
         }
     }
+}
+
+// Retrieves the last pressed hotkey, resetting the state
+pub fn get_last_pressed_hotkey() -> Option<i32> {
+    let mut hotkey_pressed = HOTKEY_PRESSED.lock().unwrap();
+    let result = *hotkey_pressed;
+    *hotkey_pressed = None; // Reset the state
+    result
 }

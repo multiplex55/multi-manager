@@ -1,5 +1,5 @@
 use crate::window_manager::*;
-use crate::workspace::{load_workspaces, save_workspaces, Window, Workspace};
+use crate::workspace::*;
 use eframe::egui;
 use eframe::{self, App as EframeApp};
 use log::{info, warn};
@@ -45,6 +45,22 @@ impl EframeApp for App {
         let mut workspace_to_delete = None;
         let mut save_workspaces_flag = false;
         let mut new_workspace_to_add: Option<Workspace> = None;
+
+        // Check for hotkey presses
+        if let Some(hotkey_id) = get_last_pressed_hotkey() {
+            if let Some((i, workspace)) = self
+                .workspaces
+                .iter_mut()
+                .enumerate()
+                .find(|(i, _)| *i as i32 == hotkey_id)
+            {
+                info!("Activating workspace '{}' via hotkey.", workspace.name);
+                // Perform the toggle action for the workspace
+                toggle_workspace_windows(workspace);
+            } else {
+                warn!("Hotkey ID '{}' does not map to any workspace.", hotkey_id);
+            }
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Multi Manager");
