@@ -1,0 +1,11 @@
+appenders:
+  file:
+    kind: file
+    path: "multi_manager.log"
+    encoder:
+      pattern: "{d} - {l} - {m}{n}"
+
+root:
+  level: info
+  appenders:
+    - file

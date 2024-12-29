@@ -5,6 +5,7 @@ use crate::window_manager::{
 use crate::workspace::{load_workspaces, save_workspaces, Window, Workspace};
 use eframe::egui;
 use eframe::{self, App as EframeApp};
+use log::{error, info, warn};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use windows::Win32::Foundation::HWND;
@@ -17,6 +18,7 @@ pub struct App {
 }
 
 pub fn run_gui(mut app: App) {
+    info!("Loading workspaces from file...");
     app.workspaces = load_workspaces("workspaces.json");
 
     let options = eframe::NativeOptions {
@@ -25,6 +27,7 @@ pub fn run_gui(mut app: App) {
 
     if let Ok(mut running) = app.hotkey_thread_running.lock() {
         if !*running {
+            info!("Starting hotkey event handler thread...");
             *running = true;
             let workspaces = Arc::new(Mutex::new(app.workspaces.clone()));
             thread::spawn({
@@ -37,7 +40,12 @@ pub fn run_gui(mut app: App) {
         }
     }
 
-    let _ = eframe::run_native("Multi Manager", options, Box::new(|_cc| Ok(Box::new(app))));
+    info!("Launching GUI...");
+    if let Err(err) =
+        eframe::run_native("Multi Manager", options, Box::new(|_cc| Ok(Box::new(app))))
+    {
+        error!("Failed to launch GUI: {}", err);
+    }
 }
 
 impl EframeApp for App {
@@ -48,10 +56,12 @@ impl EframeApp for App {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Multi Manager");
+            // info!("Rendering main panel...");
 
             ui.horizontal(|ui| {
                 if ui.button("Save Workspaces").clicked() {
                     save_workspaces_flag = true;
+                    info!("Save Workspaces button clicked.");
                 }
 
                 if ui.button("Add New Workspace").clicked() {
@@ -60,6 +70,7 @@ impl EframeApp for App {
                         hotkey: None,
                         windows: Vec::new(),
                     });
+                    info!("New workspace queued for addition.");
                 }
             });
 
@@ -80,7 +91,18 @@ impl EframeApp for App {
 
                             if ui.button("Set Hotkey").clicked() {
                                 workspace.hotkey = Some("Ctrl+Alt+H".to_string());
-                                register_hotkey(i as i32, workspace.hotkey.as_ref().unwrap());
+                                if register_hotkey(i as i32, workspace.hotkey.as_ref().unwrap()) {
+                                    info!(
+                                        "Hotkey set for workspace '{}': {}",
+                                        workspace.name,
+                                        workspace.hotkey.as_ref().unwrap()
+                                    );
+                                } else {
+                                    warn!(
+                                        "Failed to set hotkey for workspace '{}'.",
+                                        workspace.name
+                                    );
+                                }
                             }
                         });
 
@@ -89,32 +111,47 @@ impl EframeApp for App {
                             ui.horizontal(|ui| {
                                 ui.label(&window.title);
 
-                                if ui.button("Move to Target").clicked() {
-                                    if let Err(e) = move_window(
-                                        HWND(window.id as *mut std::ffi::c_void),
-                                        window.target.0,
-                                        window.target.1,
-                                        window.target.2,
-                                        window.target.3,
-                                    ) {
-                                        ui.label(format!("Error: {}", e));
-                                    }
-                                }
-
                                 if ui.button("Move to Home").clicked() {
-                                    if let Err(e) = move_window(
+                                    match move_window(
                                         HWND(window.id as *mut std::ffi::c_void),
                                         window.home.0,
                                         window.home.1,
                                         window.home.2,
                                         window.home.3,
                                     ) {
-                                        ui.label(format!("Error: {}", e));
+                                        Ok(_) => info!(
+                                            "Moved window '{}' to home position.",
+                                            window.title
+                                        ),
+                                        Err(e) => error!(
+                                            "Failed to move window '{}': {}",
+                                            window.title, e
+                                        ),
+                                    }
+                                }
+
+                                if ui.button("Move to Target").clicked() {
+                                    match move_window(
+                                        HWND(window.id as *mut std::ffi::c_void),
+                                        window.target.0,
+                                        window.target.1,
+                                        window.target.2,
+                                        window.target.3,
+                                    ) {
+                                        Ok(_) => info!(
+                                            "Moved window '{}' to target position.",
+                                            window.title
+                                        ),
+                                        Err(e) => error!(
+                                            "Failed to move window '{}': {}",
+                                            window.title, e
+                                        ),
                                     }
                                 }
 
                                 if ui.button("Delete").clicked() {
                                     window_to_delete = Some(j);
+                                    info!("Window '{}' queued for deletion.", window.title);
                                 }
                             });
 
@@ -136,7 +173,8 @@ impl EframeApp for App {
                         }
 
                         if let Some(index) = window_to_delete {
-                            workspace.windows.remove(index);
+                            let deleted_window = workspace.windows.remove(index);
+                            info!("Deleted window: {}", deleted_window.title);
                         }
 
                         if ui.button("Capture Active Window").clicked() {
@@ -144,33 +182,38 @@ impl EframeApp for App {
                                 if let Some((hwnd, title)) = get_active_window() {
                                     workspace.windows.push(Window {
                                         id: hwnd.0 as usize,
-                                        title,
+                                        title: title.clone(),
                                         home: (0, 0, 800, 600),
                                         target: (0, 0, 800, 600),
                                     });
+                                    info!("Captured active window: '{}'.", &title);
                                 }
                             } else {
-                                ui.label("Capture canceled.");
+                                warn!("Window capture canceled.");
                             }
                         }
 
                         if ui.button("Delete Workspace").clicked() {
                             workspace_to_delete = Some(i);
+                            info!("Workspace '{}' queued for deletion.", workspace.name);
                         }
                     });
             }
 
             if let Some(new_workspace) = new_workspace_to_add {
+                info!("Adding new workspace: '{}'.", new_workspace.name);
                 self.workspaces.push(new_workspace);
             }
 
             if let Some(index) = workspace_to_delete {
-                self.workspaces.remove(index);
+                let deleted_workspace = self.workspaces.remove(index);
+                info!("Deleted workspace: '{}'.", deleted_workspace.name);
             }
         });
 
         if save_workspaces_flag {
             save_workspaces(&self.workspaces, "workspaces.json");
+            info!("Workspaces saved to file.");
         }
     }
 }

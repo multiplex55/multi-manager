@@ -1,4 +1,5 @@
 use crate::workspace::Workspace;
+use log::{error, info, warn};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -32,12 +33,13 @@ pub fn register_hotkey(id: i32, key_sequence: &str) -> bool {
             if RegisterHotKey(None, id, HOT_KEY_MODIFIERS(modifiers), vk).is_ok() {
                 let mut hotkeys = HOTKEYS.lock().unwrap();
                 hotkeys.insert(id, id as usize);
+                info!("Registered hotkey: '{}' with ID: {}", key_sequence, id);
                 return true;
             }
         }
     }
 
-    eprintln!("Failed to register hotkey: {}", key_sequence);
+    warn!("Failed to register hotkey: '{}'", key_sequence);
     false
 }
 
@@ -46,7 +48,11 @@ pub fn unregister_hotkeys() {
     unsafe {
         let mut hotkeys = HOTKEYS.lock().unwrap();
         for id in hotkeys.keys() {
-            UnregisterHotKey(None, *id);
+            if UnregisterHotKey(None, *id).is_ok() {
+                info!("Unregistered hotkey with ID: {}", id);
+            } else {
+                warn!("Failed to unregister hotkey with ID: {}", id);
+            }
         }
         hotkeys.clear();
     }
@@ -64,7 +70,12 @@ pub fn handle_hotkey_events(workspaces: Arc<Mutex<Vec<Workspace>>>) {
                     let workspaces = workspaces.lock().unwrap();
                     if let Some(workspace) = workspaces.get(*workspace_id) {
                         display_message_box(&workspace.name);
+                        info!("Hotkey triggered for workspace: '{}'", workspace.name);
+                    } else {
+                        warn!("Workspace ID '{}' not found.", workspace_id);
                     }
+                } else {
+                    warn!("No matching hotkey ID: '{}'", hotkey_id);
                 }
             }
             TranslateMessage(&msg);
@@ -95,6 +106,7 @@ fn display_message_box(workspace_name: &str) {
             MB_OK | MB_ICONINFORMATION,
         );
     }
+    info!("Displayed message box for workspace: '{}'", workspace_name);
 }
 
 // Converts a string to a virtual key code
@@ -162,11 +174,13 @@ pub fn get_active_window() -> Option<(HWND, String)> {
     unsafe {
         let hwnd = GetForegroundWindow();
         if hwnd.0.is_null() {
+            error!("No active window detected.");
             None
         } else {
             let mut buffer = [0u16; 256];
             let length = GetWindowTextW(hwnd, &mut buffer);
             let title = String::from_utf16_lossy(&buffer[..length as usize]);
+            info!("Active window title: '{}'", title);
             Some((hwnd, title))
         }
     }
@@ -175,7 +189,11 @@ pub fn get_active_window() -> Option<(HWND, String)> {
 // Moves a window to a specific position and size
 pub fn move_window(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) -> Result<()> {
     unsafe {
-        SetWindowPos(hwnd, HWND_TOP, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE)?;
+        SetWindowPos(hwnd, HWND_TOP, x, y, w, h, SWP_NOZORDER)?; // SWP_NOACTIVATE
+        info!(
+            "Moved window to position ({}, {}), size ({}, {}).",
+            x, y, w, h
+        );
         Ok(())
     }
 }
@@ -205,9 +223,11 @@ pub fn listen_for_keys_with_dialog() -> Option<&'static str> {
 
         loop {
             if GetAsyncKeyState(VK_RETURN.0 as i32) < 0 {
+                info!("Enter key pressed.");
                 return Some("Enter");
             }
             if GetAsyncKeyState(VK_ESCAPE.0 as i32) < 0 {
+                info!("Escape key pressed. Action canceled.");
                 return Some("Esc");
             }
         }
