@@ -151,10 +151,10 @@ impl EframeApp for App {
                         if ui.button("Capture Active Window").clicked() {
                             match listen_for_keys_with_dialog() {
                                 Some("Enter") => {
-                                    if let Some(hwnd) = get_active_window() {
+                                    if let Some((hwnd, title)) = get_active_window() {
                                         let new_window = Window {
                                             id: hwnd.0 as usize,
-                                            title: format!("Window {:?}", hwnd.0),
+                                            title,
                                             home: (0, 0, 800, 600),
                                             target: (0, 0, 800, 600),
                                         };
