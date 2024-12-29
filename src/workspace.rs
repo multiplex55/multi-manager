@@ -1,3 +1,4 @@
+use crate::window_manager::register_hotkey;
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -45,9 +46,26 @@ pub fn load_workspaces(file_path: &str) -> Vec<Workspace> {
                 error!("Failed to read file '{}': {}", file_path, e);
                 return Vec::new();
             }
-            match serde_json::from_str(&content) {
-                Ok(workspaces) => {
+            match serde_json::from_str::<Vec<Workspace>>(&content) {
+                Ok(mut workspaces) => {
                     info!("Successfully loaded workspaces from '{}'.", file_path);
+
+                    for (i, workspace) in workspaces.iter_mut().enumerate() {
+                        if let Some(ref hotkey) = workspace.hotkey {
+                            if !register_hotkey(i as i32, hotkey) {
+                                warn!(
+                                    "Failed to register hotkey '{}' for workspace '{}'.",
+                                    hotkey, workspace.name
+                                );
+                            } else {
+                                info!(
+                                    "Registered hotkey '{}' for workspace '{}'.",
+                                    hotkey, workspace.name
+                                );
+                            }
+                        }
+                    }
+
                     workspaces
                 }
                 Err(e) => {

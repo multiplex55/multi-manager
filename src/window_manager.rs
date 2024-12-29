@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use windows::core::{Result, PCWSTR};
 use windows::Win32::Foundation::{HWND, RECT};
+use windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
@@ -12,6 +13,37 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 static HOTKEYS: Lazy<Mutex<HashMap<i32, usize>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 // Static map to track pressed hotkeys
 static HOTKEY_PRESSED: Lazy<Mutex<Option<i32>>> = Lazy::new(|| Mutex::new(None));
+
+/// Checks if a hotkey is pressed based on the key sequence string
+pub fn is_hotkey_pressed(key_sequence: &str) -> bool {
+    let mut modifiers_pressed = true;
+    let mut vk_code: Option<u32> = None;
+
+    for part in key_sequence.split('+') {
+        match part.to_lowercase().as_str() {
+            "ctrl" => unsafe {
+                modifiers_pressed &= GetAsyncKeyState(VK_CONTROL.0 as i32) < 0;
+            },
+            "alt" => unsafe {
+                modifiers_pressed &= GetAsyncKeyState(VK_MENU.0 as i32) < 0;
+            },
+            "shift" => unsafe {
+                modifiers_pressed &= GetAsyncKeyState(VK_SHIFT.0 as i32) < 0;
+            },
+            "win" => unsafe {
+                modifiers_pressed &= GetAsyncKeyState(VK_LWIN.0 as i32) < 0
+                    || GetAsyncKeyState(VK_RWIN.0 as i32) < 0;
+            },
+            _ => vk_code = virtual_key_from_string(part),
+        }
+    }
+
+    if let Some(vk) = vk_code {
+        unsafe { modifiers_pressed && GetAsyncKeyState(vk as i32) < 0 }
+    } else {
+        false
+    }
+}
 
 // Registers a global hotkey for a workspace
 pub fn register_hotkey(id: i32, key_sequence: &str) -> bool {

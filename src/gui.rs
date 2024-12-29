@@ -13,8 +13,8 @@ pub struct App {
     pub current_workspace: Option<usize>,
     pub hotkey_thread_running: Arc<Mutex<bool>>,
 }
-
 pub fn run_gui(mut app: App) {
+    // Load workspaces and register their hotkeys
     app.workspaces = load_workspaces("workspaces.json");
 
     let options = eframe::NativeOptions {
@@ -46,19 +46,16 @@ impl EframeApp for App {
         let mut save_workspaces_flag = false;
         let mut new_workspace_to_add: Option<Workspace> = None;
 
-        // Check for hotkey presses
-        if let Some(hotkey_id) = get_last_pressed_hotkey() {
-            if let Some((i, workspace)) = self
-                .workspaces
-                .iter_mut()
-                .enumerate()
-                .find(|(i, _)| *i as i32 == hotkey_id)
-            {
-                info!("Activating workspace '{}' via hotkey.", workspace.name);
-                // Perform the toggle action for the workspace
-                toggle_workspace_windows(workspace);
-            } else {
-                warn!("Hotkey ID '{}' does not map to any workspace.", hotkey_id);
+        // Check for hotkey presses directly in the update method
+        for (i, workspace) in self.workspaces.iter_mut().enumerate() {
+            if let Some(ref hotkey) = workspace.hotkey {
+                if is_hotkey_pressed(hotkey) {
+                    info!(
+                        "Activating workspace '{}' via hotkey '{}'.",
+                        workspace.name, hotkey
+                    );
+                    toggle_workspace_windows(workspace);
+                }
             }
         }
 
