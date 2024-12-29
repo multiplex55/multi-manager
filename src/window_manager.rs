@@ -197,13 +197,119 @@ pub fn listen_for_keys_with_dialog() -> Option<&'static str> {
 /// Converts a string to a virtual key code.
 fn virtual_key_from_string(key: &str) -> Option<u32> {
     match key.to_uppercase().as_str() {
+        // Function keys
         "F1" => Some(0x70),
         "F2" => Some(0x71),
         "F3" => Some(0x72),
+        "F4" => Some(0x73),
+        "F5" => Some(0x74),
+        "F6" => Some(0x75),
+        "F7" => Some(0x76),
+        "F8" => Some(0x77),
+        "F9" => Some(0x78),
+        "F10" => Some(0x79),
+        "F11" => Some(0x7A),
+        "F12" => Some(0x7B),
+        "F13" => Some(0x7C),
+        "F14" => Some(0x7D),
+        "F15" => Some(0x7E),
+        "F16" => Some(0x7F),
+        "F17" => Some(0x80),
+        "F18" => Some(0x81),
+        "F19" => Some(0x82),
+        "F20" => Some(0x83),
+        "F21" => Some(0x84),
+        "F22" => Some(0x85),
+        "F23" => Some(0x86),
+        "F24" => Some(0x87),
+
+        // Alphabet keys
         "A" => Some(0x41),
         "B" => Some(0x42),
         "C" => Some(0x43),
-        // Add more key mappings as needed.
+        "D" => Some(0x44),
+        "E" => Some(0x45),
+        "F" => Some(0x46),
+        "G" => Some(0x47),
+        "H" => Some(0x48),
+        "I" => Some(0x49),
+        "J" => Some(0x4A),
+        "K" => Some(0x4B),
+        "L" => Some(0x4C),
+        "M" => Some(0x4D),
+        "N" => Some(0x4E),
+        "O" => Some(0x4F),
+        "P" => Some(0x50),
+        "Q" => Some(0x51),
+        "R" => Some(0x52),
+        "S" => Some(0x53),
+        "T" => Some(0x54),
+        "U" => Some(0x55),
+        "V" => Some(0x56),
+        "W" => Some(0x57),
+        "X" => Some(0x58),
+        "Y" => Some(0x59),
+        "Z" => Some(0x5A),
+
+        // Numeric keys
+        "0" => Some(0x30),
+        "1" => Some(0x31),
+        "2" => Some(0x32),
+        "3" => Some(0x33),
+        "4" => Some(0x34),
+        "5" => Some(0x35),
+        "6" => Some(0x36),
+        "7" => Some(0x37),
+        "8" => Some(0x38),
+        "9" => Some(0x39),
+
+        // Numpad keys
+        "NUMPAD0" => Some(0x60),
+        "NUMPAD1" => Some(0x61),
+        "NUMPAD2" => Some(0x62),
+        "NUMPAD3" => Some(0x63),
+        "NUMPAD4" => Some(0x64),
+        "NUMPAD5" => Some(0x65),
+        "NUMPAD6" => Some(0x66),
+        "NUMPAD7" => Some(0x67),
+        "NUMPAD8" => Some(0x68),
+        "NUMPAD9" => Some(0x69),
+        "NUMPAD_ADD" => Some(0x6B),
+        "NUMPAD_SUBTRACT" => Some(0x6D),
+        "NUMPAD_MULTIPLY" => Some(0x6A),
+        "NUMPAD_DIVIDE" => Some(0x6F),
+        "NUMPAD_DECIMAL" => Some(0x6E),
+
+        // Special keys
+        "ESCAPE" => Some(0x1B),
+        "ENTER" => Some(0x0D),
+        "TAB" => Some(0x09),
+        "SPACE" => Some(0x20),
+        "BACKSPACE" => Some(0x08),
+        "DELETE" => Some(0x2E),
+        "INSERT" => Some(0x2D),
+        "HOME" => Some(0x24),
+        "END" => Some(0x23),
+        "PAGE_UP" => Some(0x21),
+        "PAGE_DOWN" => Some(0x22),
+        "ARROW_UP" => Some(0x26),
+        "ARROW_DOWN" => Some(0x28),
+        "ARROW_LEFT" => Some(0x25),
+        "ARROW_RIGHT" => Some(0x27),
+
+        // Symbols
+        "GRAVE" => Some(0xC0),         // `
+        "MINUS" => Some(0xBD),         // -
+        "EQUALS" => Some(0xBB),        // =
+        "LEFT_BRACKET" => Some(0xDB),  // [
+        "RIGHT_BRACKET" => Some(0xDD), // ]
+        "BACKSLASH" => Some(0xDC),     // \
+        "SEMICOLON" => Some(0xBA),     // ;
+        "APOSTROPHE" => Some(0xDE),    // '
+        "COMMA" => Some(0xBC),         // ,
+        "PERIOD" => Some(0xBE),        // .
+        "SLASH" => Some(0xBF),         // /
+
         _ => None,
     }
 }
