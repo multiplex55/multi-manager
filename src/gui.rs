@@ -1,13 +1,11 @@
 use crate::window_manager::{
-    capture_hotkey_dialog, get_active_window, get_window_position, move_window,
+    get_active_window, get_window_position, listen_for_keys_with_dialog, move_window,
 };
 use crate::workspace::{save_workspaces, Window, Workspace};
 use eframe::egui;
 use eframe::{self, App as EframeApp};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::sync::{Arc, Mutex};
-use std::thread;
 use windows::Win32::Foundation::HWND;
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -38,7 +36,8 @@ impl EframeApp for App {
         let mut workspace_to_delete = None;
         let mut save_workspaces_flag = false;
 
-        let hotkey_capture_result = Arc::new(Mutex::new(None::<String>));
+        // New workspace to add after iteration to avoid borrow conflicts
+        let mut new_workspace_to_add: Option<Workspace> = None;
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Multi Manager");
@@ -50,12 +49,11 @@ impl EframeApp for App {
                 }
 
                 if ui.button("Add New Workspace").clicked() {
-                    let new_workspace = Workspace {
+                    new_workspace_to_add = Some(Workspace {
                         name: format!("Workspace {}", self.workspaces.len() + 1),
                         hotkey: None,
                         windows: Vec::new(),
-                    };
-                    self.workspaces.push(new_workspace);
+                    });
                 }
             });
 
@@ -78,15 +76,7 @@ impl EframeApp for App {
 
                             // Set Hotkey button
                             if ui.button("Set Hotkey").clicked() {
-                                let result = hotkey_capture_result.clone();
-                                std::thread::spawn(move || {
-                                    capture_hotkey_dialog(result);
-                                });
-                            }
-
-                            // Apply captured hotkey
-                            if let Some(hotkey) = hotkey_capture_result.lock().unwrap().take() {
-                                workspace.hotkey = Some(hotkey);
+                                workspace.hotkey = Some("Ctrl+Alt+H".to_string());
                             }
                         });
 
@@ -157,16 +147,24 @@ impl EframeApp for App {
                             workspace.windows.remove(index);
                         }
 
+                        // Capture Window Button
                         if ui.button("Capture Active Window").clicked() {
-                            if let Some(hwnd) = get_active_window() {
-                                let title = format!("Window {:?}", hwnd.0);
-                                let new_window = Window {
-                                    id: hwnd.0 as usize,
-                                    title,
-                                    home: (0, 0, 800, 600),
-                                    target: (0, 0, 800, 600),
-                                };
-                                workspace.windows.push(new_window);
+                            match listen_for_keys_with_dialog() {
+                                Some("Enter") => {
+                                    if let Some(hwnd) = get_active_window() {
+                                        let new_window = Window {
+                                            id: hwnd.0 as usize,
+                                            title: format!("Window {:?}", hwnd.0),
+                                            home: (0, 0, 800, 600),
+                                            target: (0, 0, 800, 600),
+                                        };
+                                        workspace.windows.push(new_window);
+                                    }
+                                }
+                                Some("Esc") => {
+                                    ui.label("Window capture canceled.");
+                                }
+                                _ => {}
                             }
                         }
 
@@ -174,6 +172,11 @@ impl EframeApp for App {
                             workspace_to_delete = Some(i);
                         }
                     });
+            }
+
+            // Add a new workspace after iteration
+            if let Some(new_workspace) = new_workspace_to_add {
+                self.workspaces.push(new_workspace);
             }
 
             if let Some(index) = workspace_to_delete {

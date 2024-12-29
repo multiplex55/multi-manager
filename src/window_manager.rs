@@ -1,7 +1,10 @@
 use std::sync::{Arc, Mutex};
+use windows::core::PCWSTR;
 use windows::Win32::Foundation::{HWND, RECT};
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_ESCAPE, VK_RETURN};
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetForegroundWindow, GetWindowRect, SetWindowPos, HWND_TOP, SWP_NOACTIVATE, SWP_NOZORDER,
+    GetForegroundWindow, GetWindowRect, MessageBoxW, SetWindowPos, HWND_TOP, MB_ICONINFORMATION,
+    MB_ICONWARNING, MB_OK, SWP_NOACTIVATE, SWP_NOZORDER,
 };
 use winit::platform::run_return::EventLoopExtRunReturn;
 use winit::platform::windows::EventLoopBuilderExtWindows;
@@ -37,6 +40,60 @@ pub fn get_window_position(hwnd: HWND) -> Result<(i32, i32, i32, i32), &'static 
             Ok((x, y, w, h))
         } else {
             Err("Failed to retrieve window position.")
+        }
+    }
+}
+
+pub fn listen_for_keys_with_dialog() -> Option<&'static str> {
+    unsafe {
+        // Display dialog prompting user input
+        let message = "Press Enter to confirm or Escape to cancel.";
+        MessageBoxW(
+            None,
+            PCWSTR(
+                message
+                    .encode_utf16()
+                    .chain(Some(0))
+                    .collect::<Vec<_>>()
+                    .as_ptr(),
+            ),
+            PCWSTR(
+                "Action Required"
+                    .encode_utf16()
+                    .chain(Some(0))
+                    .collect::<Vec<_>>()
+                    .as_ptr(),
+            ),
+            MB_OK | MB_ICONINFORMATION,
+        );
+
+        loop {
+            // Check for "Enter" key
+            if GetAsyncKeyState(VK_RETURN.0 as i32) < 0 {
+                return Some("Enter");
+            }
+            // Check for "Escape" key
+            if GetAsyncKeyState(VK_ESCAPE.0 as i32) < 0 {
+                MessageBoxW(
+                    None,
+                    PCWSTR(
+                        "Action canceled by user."
+                            .encode_utf16()
+                            .chain(Some(0))
+                            .collect::<Vec<_>>()
+                            .as_ptr(),
+                    ),
+                    PCWSTR(
+                        "Canceled"
+                            .encode_utf16()
+                            .chain(Some(0))
+                            .collect::<Vec<_>>()
+                            .as_ptr(),
+                    ),
+                    MB_OK | MB_ICONWARNING,
+                );
+                return Some("Esc");
+            }
         }
     }
 }
