@@ -12,7 +12,6 @@ use windows::Win32::Foundation::HWND;
 #[derive(Clone)]
 pub struct App {
     pub workspaces: Arc<Mutex<Vec<Workspace>>>,
-    pub current_workspace: Option<usize>,
     pub last_hotkey_info: Arc<Mutex<Option<(String, Instant)>>>,
     pub hotkey_promise: Arc<Mutex<Option<Promise<()>>>>,
 }
@@ -55,7 +54,7 @@ impl EframeApp for App {
                 }
 
                 if ui.button("Add New Workspace").clicked() {
-                    let mut workspaces = self.workspaces.lock().unwrap();
+                    let workspaces = self.workspaces.lock().unwrap();
                     new_workspace_to_add = Some(Workspace {
                         name: format!("Workspace {}", workspaces.len() + 1),
                         hotkey: None,
@@ -83,28 +82,46 @@ impl EframeApp for App {
                     .id_salt(i)
                     .default_open(true)
                     .show(ui, |ui| {
+                        use regex::Regex;
+
                         ui.horizontal(|ui| {
                             ui.label("Hotkey:");
-                            if let Some(hotkey) = &workspace.hotkey {
-                                ui.label(hotkey);
-                            } else {
-                                ui.label("None");
-                            }
-
-                            if ui.button("Set Hotkey").clicked() {
-                                if let Some(_) = &workspace.hotkey {
-                                    unregister_hotkey(i as i32);
+                        
+                            let mut current_hotkey = workspace.hotkey.clone().unwrap_or_else(|| "None".to_string());
+                            let mut temp_hotkey = current_hotkey.clone();
+                        
+                            let response = ui.text_edit_singleline(&mut temp_hotkey);
+                        
+                            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                                // Validate the entered hotkey
+                                let valid_hotkey_pattern = r"(?i)^(ctrl|alt|shift|win)(\+(ctrl|alt|shift|win))*\+([a-z]|f[1-9]|f1[0-9]|f2[0-4]|numpad[0-9]|up|down|left|right|backspace|tab|enter|pause|capslock|escape|space|pageup|pagedown|end|home|insert|delete|oem_(plus|comma|minus|period|1|2|3|4|5|6|7)|printscreen|scrolllock|numlock|left(ctrl|shift|alt)|right(ctrl|shift|alt))$|^(?:[a-z]|f[1-9]|f1[0-9]|f2[0-4]|numpad[0-9]|up|down|left|right|backspace|tab|enter|pause|capslock|escape|space|pageup|pagedown|end|home|insert|delete|oem_(plus|comma|minus|period|1|2|3|4|5|6|7)|printscreen|scrolllock|numlock|left(ctrl|shift|alt)|right(ctrl|shift|alt))$";
+                        
+                                if let Ok(hotkey_regex) = Regex::new(valid_hotkey_pattern) {
+                                    if hotkey_regex.is_match(&temp_hotkey) {
+                                        // Valid hotkey: update the workspace and register it
+                                        if let Some(_existing_hotkey) = &workspace.hotkey {
+                                            unregister_hotkey(i as i32); // Unregister the previous hotkey
+                                        }
+                        
+                                        if !register_hotkey(i as i32, &temp_hotkey) {
+                                            warn!("Failed to set hotkey for workspace '{}'.", workspace.name);
+                                        } else {
+                                            workspace.hotkey = Some(temp_hotkey.clone());
+                                            info!("Set hotkey '{}' for workspace '{}'.", temp_hotkey, workspace.name);
+                                        }
+                                    } else {
+                                        // Invalid hotkey: revert to the previous value
+                                        warn!("Invalid hotkey string: '{}'. Keeping previous value.", temp_hotkey);
+                                        temp_hotkey = current_hotkey.clone(); // Restore the previous value
+                                    }
                                 }
-                                workspace.hotkey = Some("Ctrl+Alt+H".to_string());
-                                if !register_hotkey(i as i32, workspace.hotkey.as_ref().unwrap()) {
-                                    warn!(
-                                        "Failed to set hotkey for workspace '{}'.",
-                                        workspace.name
-                                    );
-                                }
                             }
+                        
+                            // Update the textbox with the latest valid hotkey
+                            current_hotkey = temp_hotkey.clone();
+                            workspace.hotkey = Some(current_hotkey.clone());
                         });
-
+                        
                         let mut window_to_delete = None;
                         for (j, window) in workspace.windows.iter_mut().enumerate() {
                             ui.horizontal(|ui| {

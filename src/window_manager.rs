@@ -2,7 +2,7 @@ use crate::workspace::Workspace;
 use log::{error, info, warn};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use windows::core::{Result, PCWSTR};
 use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
@@ -11,8 +11,6 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 // Static hotkeys map
 static HOTKEYS: Lazy<Mutex<HashMap<i32, usize>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-// Static map to track pressed hotkeys
-static HOTKEY_PRESSED: Lazy<Mutex<Option<i32>>> = Lazy::new(|| Mutex::new(None));
 
 /// Checks if a hotkey is pressed based on the key sequence string
 pub fn is_hotkey_pressed(key_sequence: &str) -> bool {
@@ -83,7 +81,7 @@ pub fn register_hotkey(id: i32, key_sequence: &str) -> bool {
 // Unregisters a global hotkey
 pub fn unregister_hotkey(id: i32) {
     unsafe {
-        if let Ok(_) = UnregisterHotKey(None, id) {
+        if UnregisterHotKey(None, id).is_ok() {
             let mut hotkeys = HOTKEYS.lock().unwrap();
             hotkeys.remove(&id);
             info!("Unregistered hotkey with ID {}.", id);
@@ -93,123 +91,124 @@ pub fn unregister_hotkey(id: i32) {
     }
 }
 
-// Handles global hotkey events and toggles workspace windows
-pub fn handle_hotkey_events(workspaces: Arc<Mutex<Vec<Workspace>>>) {
-    unsafe {
-        let mut msg = MSG::default();
-        while GetMessageW(&mut msg, None, 0, 0).as_bool() {
-            if msg.message == WM_HOTKEY {
-                let hotkey_id = msg.wParam.0 as i32;
-                let hotkeys = HOTKEYS.lock().unwrap();
-                if let Some(workspace_id) = hotkeys.get(&hotkey_id) {
-                    let mut workspaces = workspaces.lock().unwrap();
-                    if let Some(workspace) = workspaces.get_mut(*workspace_id) {
-                        toggle_workspace_windows(workspace);
-                        info!("Activated workspace: '{}'.", workspace.name);
-                    } else {
-                        warn!("Workspace ID '{}' not found.", workspace_id);
-                    }
-                } else {
-                    warn!("Hotkey ID '{}' not registered.", hotkey_id);
-                }
-            }
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-    }
-}
+// // Handles global hotkey events and toggles workspace windows
+// pub fn handle_hotkey_events(workspaces: Arc<Mutex<Vec<Workspace>>>) {
+//     unsafe {
+//         let mut msg = MSG::default();
+//         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+//             if msg.message == WM_HOTKEY {
+//                 let hotkey_id = msg.wParam.0 as i32;
+//                 let hotkeys = HOTKEYS.lock().unwrap();
+//                 if let Some(workspace_id) = hotkeys.get(&hotkey_id) {
+//                     let mut workspaces = workspaces.lock().unwrap();
+//                     if let Some(workspace) = workspaces.get_mut(*workspace_id) {
+//                         toggle_workspace_windows(workspace);
+//                         info!("Activated workspace: '{}'.", workspace.name);
+//                     } else {
+//                         warn!("Workspace ID '{}' not found.", workspace_id);
+//                     }
+//                 } else {
+//                     warn!("Hotkey ID '{}' not registered.", hotkey_id);
+//                 }
+//             }
+//             let _ = TranslateMessage(&msg);
+//             DispatchMessageW(&msg);
+//         }
+//     }
+// }
 
 // Listens for low-level keyboard events
-pub fn listen_for_keyboard_event(key_sequence: &str) -> Option<()> {
-    info!(
-        "Initializing listen_for_keyboard_event with key sequence: '{}'",
-        key_sequence
-    );
 
-    // Parse the key sequence into modifiers and virtual key code
-    let mut modifiers: u32 = 0;
-    let mut vk_code: Option<u32> = None;
+// pub fn listen_for_keyboard_event(key_sequence: &str) -> Option<()> {
+//     info!(
+//         "Initializing listen_for_keyboard_event with key sequence: '{}'",
+//         key_sequence
+//     );
 
-    for part in key_sequence.split('+') {
-        match part.to_lowercase().as_str() {
-            "ctrl" => modifiers |= MOD_CONTROL.0,
-            "alt" => modifiers |= MOD_ALT.0,
-            "shift" => modifiers |= MOD_SHIFT.0,
-            "win" => modifiers |= MOD_WIN.0,
-            _ => {
-                vk_code = virtual_key_from_string(part);
-                match vk_code {
-                    Some(code) => info!("Detected virtual key: '{}' -> code {}", part, code),
-                    None => warn!("Failed to parse virtual key from part: '{}'", part),
-                }
-            }
-        }
-    }
+//     // Parse the key sequence into modifiers and virtual key code
+//     let mut modifiers: u32 = 0;
+//     let mut vk_code: Option<u32> = None;
 
-    if vk_code.is_none() {
-        error!("No valid virtual key code detected. Aborting listener setup.");
-        return None;
-    }
+//     for part in key_sequence.split('+') {
+//         match part.to_lowercase().as_str() {
+//             "ctrl" => modifiers |= MOD_CONTROL.0,
+//             "alt" => modifiers |= MOD_ALT.0,
+//             "shift" => modifiers |= MOD_SHIFT.0,
+//             "win" => modifiers |= MOD_WIN.0,
+//             _ => {
+//                 vk_code = virtual_key_from_string(part);
+//                 match vk_code {
+//                     Some(code) => info!("Detected virtual key: '{}' -> code {}", part, code),
+//                     None => warn!("Failed to parse virtual key from part: '{}'", part),
+//                 }
+//             }
+//         }
+//     }
 
-    let vk = vk_code.unwrap();
-    info!(
-        "Final parsed key sequence: modifiers={:#X}, vk_code={:#X}",
-        modifiers, vk
-    );
+//     if vk_code.is_none() {
+//         error!("No valid virtual key code detected. Aborting listener setup.");
+//         return None;
+//     }
 
-    unsafe {
-        // Register the hotkey
-        // Register the hotkey
-        if RegisterHotKey(None, 1, HOT_KEY_MODIFIERS(modifiers), vk).is_err() {
-            error!(
-                "Failed to register hotkey for key sequence '{}'.",
-                key_sequence
-            );
-            return None;
-        }
-        info!("Hotkey successfully registered for '{}'.", key_sequence);
+//     let vk = vk_code.unwrap();
+//     info!(
+//         "Final parsed key sequence: modifiers={:#X}, vk_code={:#X}",
+//         modifiers, vk
+//     );
 
-        let mut msg = MSG::default();
-        info!(
-            "Entering message loop to listen for key sequence: '{}'",
-            key_sequence
-        );
+//     unsafe {
+//         // Register the hotkey
+//         // Register the hotkey
+//         if RegisterHotKey(None, 1, HOT_KEY_MODIFIERS(modifiers), vk).is_err() {
+//             error!(
+//                 "Failed to register hotkey for key sequence '{}'.",
+//                 key_sequence
+//             );
+//             return None;
+//         }
+//         info!("Hotkey successfully registered for '{}'.", key_sequence);
 
-        while GetMessageW(&mut msg, None, 0, 0).as_bool() {
-            if msg.message == WM_HOTKEY {
-                info!("WM_HOTKEY message received: msg.lParam={:#X}", msg.lParam.0);
+//         let mut msg = MSG::default();
+//         info!(
+//             "Entering message loop to listen for key sequence: '{}'",
+//             key_sequence
+//         );
 
-                MessageBoxW(
-                    None,
-                    PCWSTR(
-                        "Keyboard sequence detected!"
-                            .encode_utf16()
-                            .chain(Some(0))
-                            .collect::<Vec<_>>()
-                            .as_ptr(),
-                    ),
-                    PCWSTR(
-                        "Hotkey Triggered"
-                            .encode_utf16()
-                            .chain(Some(0))
-                            .collect::<Vec<_>>()
-                            .as_ptr(),
-                    ),
-                    MB_OK | MB_ICONINFORMATION,
-                );
+//         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+//             if msg.message == WM_HOTKEY {
+//                 info!("WM_HOTKEY message received: msg.lParam={:#X}", msg.lParam.0);
 
-                // Unregister the hotkey and return after detecting
-                UnregisterHotKey(None, 1);
-                info!("Hotkey unregistered after triggering.");
-                return Some(());
-            }
-        }
+//                 MessageBoxW(
+//                     None,
+//                     PCWSTR(
+//                         "Keyboard sequence detected!"
+//                             .encode_utf16()
+//                             .chain(Some(0))
+//                             .collect::<Vec<_>>()
+//                             .as_ptr(),
+//                     ),
+//                     PCWSTR(
+//                         "Hotkey Triggered"
+//                             .encode_utf16()
+//                             .chain(Some(0))
+//                             .collect::<Vec<_>>()
+//                             .as_ptr(),
+//                     ),
+//                     MB_OK | MB_ICONINFORMATION,
+//                 );
 
-        error!("Exited message loop unexpectedly.");
-    }
+//                 // Unregister the hotkey and return after detecting
+//                 let _unregister_hot_key = UnregisterHotKey(None, 1);
+//                 info!("Hotkey unregistered after triggering.");
+//                 return Some(());
+//             }
+//         }
 
-    None
-}
+//         error!("Exited message loop unexpectedly.");
+//     }
+
+//     None
+// }
 
 // Toggles workspace windows between home and target
 pub fn toggle_workspace_windows(workspace: &mut Workspace) {
@@ -267,29 +266,29 @@ pub fn get_window_position(hwnd: HWND) -> Result<(i32, i32, i32, i32)> {
     }
 }
 
-// Displays a message box with the workspace name
-fn display_message_box(workspace_name: &str) {
-    unsafe {
-        MessageBoxW(
-            None,
-            PCWSTR(
-                format!("Workspace triggered: {}", workspace_name)
-                    .encode_utf16()
-                    .chain(Some(0))
-                    .collect::<Vec<_>>()
-                    .as_ptr(),
-            ),
-            PCWSTR(
-                "Workspace Hotkey"
-                    .encode_utf16()
-                    .chain(Some(0))
-                    .collect::<Vec<_>>()
-                    .as_ptr(),
-            ),
-            MB_OK | MB_ICONINFORMATION,
-        );
-    }
-}
+// // Displays a message box with the workspace name
+// fn display_message_box(workspace_name: &str) {
+//     unsafe {
+//         MessageBoxW(
+//             None,
+//             PCWSTR(
+//                 format!("Workspace triggered: {}", workspace_name)
+//                     .encode_utf16()
+//                     .chain(Some(0))
+//                     .collect::<Vec<_>>()
+//                     .as_ptr(),
+//             ),
+//             PCWSTR(
+//                 "Workspace Hotkey"
+//                     .encode_utf16()
+//                     .chain(Some(0))
+//                     .collect::<Vec<_>>()
+//                     .as_ptr(),
+//             ),
+//             MB_OK | MB_ICONINFORMATION,
+//         );
+//     }
+// }
 
 // Converts a string to a virtual key code
 fn virtual_key_from_string(key: &str) -> Option<u32> {
@@ -495,10 +494,10 @@ pub fn listen_for_keys_with_dialog() -> Option<&'static str> {
     }
 }
 
-// Retrieves the last pressed hotkey, resetting the state
-pub fn get_last_pressed_hotkey() -> Option<i32> {
-    let mut hotkey_pressed = HOTKEY_PRESSED.lock().unwrap();
-    let result = *hotkey_pressed;
-    *hotkey_pressed = None; // Reset the state
-    result
-}
+// // Retrieves the last pressed hotkey, resetting the state
+// pub fn get_last_pressed_hotkey() -> Option<i32> {
+//     let mut hotkey_pressed = HOTKEY_PRESSED.lock().unwrap();
+//     let result = *hotkey_pressed;
+//     *hotkey_pressed = None; // Reset the state
+//     result
+// }

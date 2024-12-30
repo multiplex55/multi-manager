@@ -15,7 +15,6 @@ fn main() {
 
     let app = gui::App {
         workspaces: Arc::new(Mutex::new(Vec::new())),
-        current_workspace: None,
         last_hotkey_info: Arc::new(Mutex::new(None)), // Initialize to None
         hotkey_promise: Arc::new(Mutex::new(None)),   // Initialize the promise
     };
