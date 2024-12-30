@@ -251,7 +251,7 @@ fn is_window_at_position(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) -> bool {
 }
 
 // Retrieves the current position and size of a window
-fn get_window_position(hwnd: HWND) -> Result<(i32, i32, i32, i32)> {
+pub fn get_window_position(hwnd: HWND) -> Result<(i32, i32, i32, i32)> {
     unsafe {
         let mut rect = RECT::default();
         if GetWindowRect(hwnd, &mut rect).is_ok() {

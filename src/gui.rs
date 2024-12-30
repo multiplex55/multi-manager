@@ -5,6 +5,7 @@ use eframe::{self, App as EframeApp};
 use log::{info, warn};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::{Duration, Instant};
 use windows::Win32::Foundation::HWND;
 
 #[derive(Clone)]
@@ -12,7 +13,9 @@ pub struct App {
     pub workspaces: Vec<Workspace>,
     pub current_workspace: Option<usize>,
     pub hotkey_thread_running: Arc<Mutex<bool>>,
+    pub last_hotkey_info: Arc<Mutex<Option<(String, Instant)>>>, // New field for debug info
 }
+
 pub fn run_gui(mut app: App) {
     // Load workspaces and register their hotkeys
     app.workspaces = load_workspaces("workspaces.json");
@@ -46,22 +49,34 @@ impl EframeApp for App {
         let mut save_workspaces_flag = false;
         let mut new_workspace_to_add: Option<Workspace> = None;
 
-        // Check for hotkey presses directly in the update method
-        for (i, workspace) in self.workspaces.iter_mut().enumerate() {
+        let mut workspaces_to_toggle = Vec::new();
+
+        // Identify workspaces to toggle
+        for (i, workspace) in self.workspaces.iter().enumerate() {
             if let Some(ref hotkey) = workspace.hotkey {
                 if is_hotkey_pressed(hotkey) {
                     info!(
                         "Activating workspace '{}' via hotkey '{}'.",
                         workspace.name, hotkey
                     );
-                    toggle_workspace_windows(workspace);
+                    workspaces_to_toggle.push(i);
 
-                    // Delay for 500 milliseconds to prevent overlapping actions
-                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    // Update debug label info
+                    let mut last_hotkey_info = self.last_hotkey_info.lock().unwrap();
+                    *last_hotkey_info = Some((hotkey.clone(), Instant::now()));
                 }
             }
         }
 
+        // Perform the toggle after iteration
+        for index in workspaces_to_toggle {
+            if let Some(workspace) = self.workspaces.get_mut(index) {
+                toggle_workspace_windows(workspace);
+
+                // Delay for 250 milliseconds to prevent overlapping actions
+                std::thread::sleep(std::time::Duration::from_millis(250));
+            }
+        }
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Multi Manager");
 
@@ -79,6 +94,17 @@ impl EframeApp for App {
                     info!("Added a new workspace.");
                 }
             });
+
+            // Display debug info for the last detected hotkey
+            if let Some((hotkey, timestamp)) = self.last_hotkey_info.lock().unwrap().clone() {
+                ui.label(format!(
+                    "Last Hotkey Detected: {} at {:?}",
+                    hotkey,
+                    timestamp.elapsed()
+                ));
+            } else {
+                ui.label("No hotkey detected yet.");
+            }
 
             ui.separator();
 
@@ -150,6 +176,18 @@ impl EframeApp for App {
                                 ui.add(egui::DragValue::new(&mut window.home.1).prefix("y: "));
                                 ui.add(egui::DragValue::new(&mut window.home.2).prefix("w: "));
                                 ui.add(egui::DragValue::new(&mut window.home.3).prefix("h: "));
+
+                                if ui.button("Capture Home").clicked() {
+                                    if let Some((hwnd, _)) = get_active_window() {
+                                        if let Ok((x, y, w, h)) = get_window_position(hwnd) {
+                                            window.home = (x, y, w, h);
+                                            info!(
+                                                "Captured current window position for Home: {:?}",
+                                                window.home
+                                            );
+                                        }
+                                    }
+                                }
                             });
 
                             ui.horizontal(|ui| {
@@ -158,6 +196,18 @@ impl EframeApp for App {
                                 ui.add(egui::DragValue::new(&mut window.target.1).prefix("y: "));
                                 ui.add(egui::DragValue::new(&mut window.target.2).prefix("w: "));
                                 ui.add(egui::DragValue::new(&mut window.target.3).prefix("h: "));
+
+                                if ui.button("Capture Target").clicked() {
+                                    if let Some((hwnd, _)) = get_active_window() {
+                                        if let Ok((x, y, w, h)) = get_window_position(hwnd) {
+                                            window.target = (x, y, w, h);
+                                            info!(
+                                                "Captured current window position for Target: {:?}",
+                                                window.target
+                                            );
+                                        }
+                                    }
+                                }
                             });
                         }
 
