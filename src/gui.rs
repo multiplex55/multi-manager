@@ -3,6 +3,7 @@ use crate::workspace::*;
 use eframe::egui;
 use eframe::{self, App as EframeApp};
 use log::{info, warn};
+use poll_promise::Promise;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -10,37 +11,33 @@ use windows::Win32::Foundation::HWND;
 
 #[derive(Clone)]
 pub struct App {
-    pub workspaces: Vec<Workspace>,
+    pub workspaces: Arc<Mutex<Vec<Workspace>>>,
     pub current_workspace: Option<usize>,
-    pub hotkey_thread_running: Arc<Mutex<bool>>,
-    pub last_hotkey_info: Arc<Mutex<Option<(String, Instant)>>>, // New field for debug info
+    pub last_hotkey_info: Arc<Mutex<Option<(String, Instant)>>>,
+    pub hotkey_promise: Arc<Mutex<Option<Promise<()>>>>,
 }
 
-pub fn run_gui(mut app: App) {
-    // Load workspaces and register their hotkeys
-    app.workspaces = load_workspaces("workspaces.json");
+pub fn run_gui(app: App) {
+    // Load workspaces and initialize
+    {
+        let mut workspaces = app.workspaces.lock().unwrap();
+        *workspaces = load_workspaces("workspaces.json");
+    }
 
     let options = eframe::NativeOptions {
         ..Default::default()
     };
 
-    if let Ok(mut running) = app.hotkey_thread_running.lock() {
-        if !*running {
-            *running = true;
-            let workspaces = Arc::new(Mutex::new(app.workspaces.clone()));
-            thread::spawn({
-                let running_flag = app.hotkey_thread_running.clone();
-                move || {
-                    handle_hotkey_events(workspaces.clone());
-                    *running_flag.lock().unwrap() = false;
-                }
-            });
-            info!("Started hotkey event listener thread.");
-        }
-    }
+    // Start hotkey checker in a background thread with PollPromise
+    let app_for_promise = app.clone();
+    let hotkey_promise = Promise::spawn_thread("Hotkey Checker", move || loop {
+        check_hotkeys(&app_for_promise);
+        thread::sleep(Duration::from_millis(250));
+    });
+
+    *app.hotkey_promise.lock().unwrap() = Some(hotkey_promise);
 
     let _ = eframe::run_native("Multi Manager", options, Box::new(|_cc| Ok(Box::new(app))));
-    info!("GUI initialized.");
 }
 
 impl EframeApp for App {
@@ -49,34 +46,6 @@ impl EframeApp for App {
         let mut save_workspaces_flag = false;
         let mut new_workspace_to_add: Option<Workspace> = None;
 
-        let mut workspaces_to_toggle = Vec::new();
-
-        // Identify workspaces to toggle
-        for (i, workspace) in self.workspaces.iter().enumerate() {
-            if let Some(ref hotkey) = workspace.hotkey {
-                if is_hotkey_pressed(hotkey) {
-                    info!(
-                        "Activating workspace '{}' via hotkey '{}'.",
-                        workspace.name, hotkey
-                    );
-                    workspaces_to_toggle.push(i);
-
-                    // Update debug label info
-                    let mut last_hotkey_info = self.last_hotkey_info.lock().unwrap();
-                    *last_hotkey_info = Some((hotkey.clone(), Instant::now()));
-                }
-            }
-        }
-
-        // Perform the toggle after iteration
-        for index in workspaces_to_toggle {
-            if let Some(workspace) = self.workspaces.get_mut(index) {
-                toggle_workspace_windows(workspace);
-
-                // Delay for 250 milliseconds to prevent overlapping actions
-                std::thread::sleep(std::time::Duration::from_millis(250));
-            }
-        }
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Multi Manager");
 
@@ -86,12 +55,12 @@ impl EframeApp for App {
                 }
 
                 if ui.button("Add New Workspace").clicked() {
+                    let mut workspaces = self.workspaces.lock().unwrap();
                     new_workspace_to_add = Some(Workspace {
-                        name: format!("Workspace {}", self.workspaces.len() + 1),
+                        name: format!("Workspace {}", workspaces.len() + 1),
                         hotkey: None,
                         windows: Vec::new(),
                     });
-                    info!("Added a new workspace.");
                 }
             });
 
@@ -108,7 +77,8 @@ impl EframeApp for App {
 
             ui.separator();
 
-            for (i, workspace) in self.workspaces.iter_mut().enumerate() {
+            let mut workspaces = self.workspaces.lock().unwrap();
+            for (i, workspace) in workspaces.iter_mut().enumerate() {
                 egui::CollapsingHeader::new(&workspace.name)
                     .id_salt(i)
                     .default_open(true)
@@ -239,17 +209,46 @@ impl EframeApp for App {
             }
 
             if let Some(new_workspace) = new_workspace_to_add {
-                self.workspaces.push(new_workspace);
+                workspaces.push(new_workspace);
             }
 
             if let Some(index) = workspace_to_delete {
-                self.workspaces.remove(index);
+                workspaces.remove(index);
             }
         });
 
         if save_workspaces_flag {
-            save_workspaces(&self.workspaces, "workspaces.json");
+            save_workspaces(&self.workspaces.lock().unwrap(), "workspaces.json");
             info!("Workspaces saved to file.");
+        }
+    }
+}
+
+fn check_hotkeys(app: &App) {
+    let mut workspaces_to_toggle = Vec::new();
+    let workspaces = app.workspaces.lock().unwrap();
+
+    for (i, workspace) in workspaces.iter().enumerate() {
+        if let Some(ref hotkey) = workspace.hotkey {
+            if is_hotkey_pressed(hotkey) {
+                info!(
+                    "Activating workspace '{}' via hotkey '{}'.",
+                    workspace.name, hotkey
+                );
+                workspaces_to_toggle.push(i);
+
+                let mut last_hotkey_info = app.last_hotkey_info.lock().unwrap();
+                *last_hotkey_info = Some((hotkey.clone(), Instant::now()));
+            }
+        }
+    }
+
+    drop(workspaces); // Release lock before toggling
+
+    let mut workspaces = app.workspaces.lock().unwrap();
+    for index in workspaces_to_toggle {
+        if let Some(workspace) = workspaces.get_mut(index) {
+            toggle_workspace_windows(workspace);
         }
     }
 }

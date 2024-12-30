@@ -319,6 +319,7 @@ fn virtual_key_from_string(key: &str) -> Option<u32> {
         "F22" => Some(0x85),
         "F23" => Some(0x86),
         "F24" => Some(0x87),
+
         // Alphabet keys
         "A" => Some(0x41),
         "B" => Some(0x42),
@@ -346,6 +347,85 @@ fn virtual_key_from_string(key: &str) -> Option<u32> {
         "X" => Some(0x58),
         "Y" => Some(0x59),
         "Z" => Some(0x5A),
+
+        // Number keys
+        "0" => Some(0x30),
+        "1" => Some(0x31),
+        "2" => Some(0x32),
+        "3" => Some(0x33),
+        "4" => Some(0x34),
+        "5" => Some(0x35),
+        "6" => Some(0x36),
+        "7" => Some(0x37),
+        "8" => Some(0x38),
+        "9" => Some(0x39),
+
+        // Numpad keys
+        "NUMPAD0" => Some(0x60),
+        "NUMPAD1" => Some(0x61),
+        "NUMPAD2" => Some(0x62),
+        "NUMPAD3" => Some(0x63),
+        "NUMPAD4" => Some(0x64),
+        "NUMPAD5" => Some(0x65),
+        "NUMPAD6" => Some(0x66),
+        "NUMPAD7" => Some(0x67),
+        "NUMPAD8" => Some(0x68),
+        "NUMPAD9" => Some(0x69),
+        "NUMPADMULTIPLY" => Some(0x6A),
+        "NUMPADADD" => Some(0x6B),
+        "NUMPADSEPARATOR" => Some(0x6C),
+        "NUMPADSUBTRACT" => Some(0x6D),
+        "NUMPADDOT" => Some(0x6E),
+        "NUMPADDIVIDE" => Some(0x6F),
+
+        // Arrow keys
+        "UP" => Some(0x26),
+        "DOWN" => Some(0x28),
+        "LEFT" => Some(0x25),
+        "RIGHT" => Some(0x27),
+
+        // Special keys
+        "BACKSPACE" => Some(0x08),
+        "TAB" => Some(0x09),
+        "ENTER" => Some(0x0D),
+        "SHIFT" => Some(0x10),
+        "CTRL" => Some(0x11),
+        "ALT" => Some(0x12),
+        "PAUSE" => Some(0x13),
+        "CAPSLOCK" => Some(0x14),
+        "ESCAPE" => Some(0x1B),
+        "SPACE" => Some(0x20),
+        "PAGEUP" => Some(0x21),
+        "PAGEDOWN" => Some(0x22),
+        "END" => Some(0x23),
+        "HOME" => Some(0x24),
+        "INSERT" => Some(0x2D),
+        "DELETE" => Some(0x2E),
+
+        // Symbols
+        "OEM_PLUS" => Some(0xBB),   // '+' key
+        "OEM_COMMA" => Some(0xBC),  // ',' key
+        "OEM_MINUS" => Some(0xBD),  // '-' key
+        "OEM_PERIOD" => Some(0xBE), // '.' key
+        "OEM_1" => Some(0xBA),      // ';:' key
+        "OEM_2" => Some(0xBF),      // '/?' key
+        "OEM_3" => Some(0xC0),      // '`~' key
+        "OEM_4" => Some(0xDB),      // '[{' key
+        "OEM_5" => Some(0xDC),      // '\|' key
+        "OEM_6" => Some(0xDD),      // ']}' key
+        "OEM_7" => Some(0xDE),      // ''"' key
+
+        // Additional keys
+        "PRINTSCREEN" => Some(0x2C),
+        "SCROLLLOCK" => Some(0x91),
+        "NUMLOCK" => Some(0x90),
+        "LEFTSHIFT" => Some(0xA0),
+        "RIGHTSHIFT" => Some(0xA1),
+        "LEFTCTRL" => Some(0xA2),
+        "RIGHTCTRL" => Some(0xA3),
+        "LEFTALT" => Some(0xA4),
+        "RIGHTALT" => Some(0xA5),
+
         _ => None,
     }
 }
