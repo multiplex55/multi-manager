@@ -13,8 +13,6 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    /// Sets the hotkey for the workspace after validation.
-    /// Returns `Ok(())` if the hotkey is valid and assigned, or an `Err(String)` with an error message if it fails.
     pub fn set_hotkey(&mut self, hotkey: &str) -> Result<(), String> {
         if is_valid_key_combo(hotkey) {
             self.hotkey = Some(hotkey.to_string());
@@ -22,11 +20,6 @@ impl Workspace {
         } else {
             Err(format!("Invalid hotkey: '{}'", hotkey))
         }
-    }
-
-    /// Sets the name for the workspace.
-    pub fn set_name(&mut self, new_name: &str) {
-        self.name = new_name.to_string();
     }
 }
 
