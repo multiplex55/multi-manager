@@ -82,7 +82,7 @@ impl EframeApp for App {
                 let mut is_renaming = ui.memory_mut(|mem| mem.data.get_temp::<bool>(header_id).unwrap_or(false));
                 let mut new_name = ui.memory_mut(|mem| {
                     mem.data
-                        .get_temp::<String>(header_id.with("name"))
+                        .get_temp::<String>(header_id.with("wrkspce_name"))
                         .unwrap_or_else(|| workspace.name.clone())
                 });
                 
@@ -177,30 +177,6 @@ impl EframeApp for App {
                             ui.horizontal(|ui| {
                                 ui.label(&window.title);
 
-                                if ui.button("Move to Home").clicked() {
-                                    if let Err(e) = move_window(
-                                        HWND(window.id as *mut std::ffi::c_void),
-                                        window.home.0,
-                                        window.home.1,
-                                        window.home.2,
-                                        window.home.3,
-                                    ) {
-                                        warn!("Error moving window '{}': {}", window.title, e);
-                                    }
-                                }
-
-                                if ui.button("Move to Target").clicked() {
-                                    if let Err(e) = move_window(
-                                        HWND(window.id as *mut std::ffi::c_void),
-                                        window.target.0,
-                                        window.target.1,
-                                        window.target.2,
-                                        window.target.3,
-                                    ) {
-                                        warn!("Error moving window '{}': {}", window.title, e);
-                                    }
-                                }
-
                                 if ui.button("Delete").clicked() {
                                     window_to_delete = Some(j);
                                     info!("Deleting window '{}'", window.title);
@@ -229,6 +205,19 @@ impl EframeApp for App {
                                         );
                                     }
                                 }
+                                
+                                
+                            if ui.button("Move to Home").clicked() {
+                                    if let Err(e) = move_window(
+                                        HWND(window.id as *mut std::ffi::c_void),
+                                        window.home.0,
+                                        window.home.1,
+                                        window.home.2,
+                                        window.home.3,
+                                    ) {
+                                        warn!("Error moving window '{}': {}", window.title, e);
+                                    }
+                                }
                             });
                             
                             ui.horizontal(|ui| {
@@ -251,6 +240,18 @@ impl EframeApp for App {
                                             "Failed to capture window position for Target using window ID {:?}",
                                             window.id
                                         );
+                                    }
+                                }
+
+                                if ui.button("Move to Target").clicked() {
+                                    if let Err(e) = move_window(
+                                        HWND(window.id as *mut std::ffi::c_void),
+                                        window.target.0,
+                                        window.target.1,
+                                        window.target.2,
+                                        window.target.3,
+                                    ) {
+                                        warn!("Error moving window '{}': {}", window.title, e);
                                     }
                                 }
                             });
@@ -301,7 +302,7 @@ impl EframeApp for App {
 
                             if response.changed() {
                                 ui.memory_mut(|mem| {
-                                    mem.data.insert_temp(header_id.with("name"), new_name.clone());
+                                    mem.data.insert_temp(header_id.with("wrkspce_name"), new_name.clone());
                                 });
                             }
 
