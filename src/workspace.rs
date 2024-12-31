@@ -1,5 +1,6 @@
 use crate::window_manager::register_hotkey;
 use log::{error, info, warn};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{Read, Write};
@@ -11,12 +12,31 @@ pub struct Workspace {
     pub windows: Vec<Window>,
 }
 
+impl Workspace {
+    /// Sets the hotkey for the workspace after validation.
+    /// Returns `Ok(())` if the hotkey is valid and assigned, or an `Err(String)` with an error message if it fails.
+    pub fn set_hotkey(&mut self, hotkey: &str) -> Result<(), String> {
+        if is_valid_key_combo(hotkey) {
+            self.hotkey = Some(hotkey.to_string());
+            Ok(())
+        } else {
+            Err(format!("Invalid hotkey: '{}'", hotkey))
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Window {
     pub id: usize,
     pub title: String,
     pub home: (i32, i32, i32, i32),
     pub target: (i32, i32, i32, i32),
+}
+
+fn is_valid_key_combo(input: &str) -> bool {
+    let pattern = r"^(?:(?:Ctrl|Alt|Shift|Win)\+)?(?:(?:Ctrl|Alt|Shift|Win)\+)?(?:(?:Ctrl|Alt|Shift|Win)\+)?(?:(?:Ctrl|Alt|Shift|Win)\+)?(?:F(?:[1-9]|1[0-2]|1[3-9]|2[0-4])|[A-Z]|[0-9]|NUMPAD[0-9]|NUMPAD(?:MULTIPLY|ADD|SEPARATOR|SUBTRACT|DOT|DIVIDE)|UP|DOWN|LEFT|RIGHT|BACKSPACE|TAB|ENTER|PAUSE|CAPSLOCK|ESCAPE|SPACE|PAGEUP|PAGEDOWN|END|HOME|INSERT|DELETE|OEM_(?:PLUS|COMMA|MINUS|PERIOD|[1-7])|PRINTSCREEN|SCROLLLOCK|NUMLOCK|LEFT(?:SHIFT|CTRL|ALT)|RIGHT(?:SHIFT|CTRL|ALT))$";
+    let re = Regex::new(pattern).unwrap();
+    re.is_match(input)
 }
 
 /// Saves the current workspaces to a file in JSON format.

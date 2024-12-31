@@ -4,6 +4,7 @@ use eframe::egui;
 use eframe::{self, App as EframeApp};
 use log::{info, warn};
 use poll_promise::Promise;
+use winit::window;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -31,7 +32,7 @@ pub fn run_gui(app: App) {
     let app_for_promise = app.clone();
     let hotkey_promise = Promise::spawn_thread("Hotkey Checker", move || loop {
         check_hotkeys(&app_for_promise);
-        thread::sleep(Duration::from_millis(250));
+        thread::sleep(Duration::from_millis(100));
     });
 
     *app.hotkey_promise.lock().unwrap() = Some(hotkey_promise);
@@ -82,46 +83,87 @@ impl EframeApp for App {
                     .id_salt(i)
                     .default_open(true)
                     .show(ui, |ui| {
-                        use regex::Regex;
+                        use egui::{self, Color32};
+                        use log::{info, warn};
 
                         ui.horizontal(|ui| {
                             ui.label("Hotkey:");
-                        
-                            let mut current_hotkey = workspace.hotkey.clone().unwrap_or_else(|| "None".to_string());
-                            let mut temp_hotkey = current_hotkey.clone();
-                        
+
+                            // Retrieve or initialize the temporary hotkey
+                            let workspace_id = i; // Unique ID for the workspace
+                            let id = egui::Id::new(workspace_id); // Convert workspace index to egui Id
+                            let mut temp_hotkey = ui.memory_mut(|mem| {
+                                mem.data.get_temp::<String>(id).unwrap_or_else(|| {
+                                    let hotkey = workspace
+                                        .hotkey
+                                        .clone()
+                                        .unwrap_or_else(|| "None".to_string());
+                                    info!(
+                                        "Initializing temp_hotkey for workspace '{}': {}",
+                                        workspace.name, hotkey
+                                    );
+                                    hotkey
+                                })
+                            });
+
+                            // Validation result: use egui's memory to persist between frames
+                            let mut validation_result = ui.memory_mut(|mem| {
+                                mem.data.get_temp::<Option<bool>>(id).unwrap_or(None)
+                            });
+
+                            // Editable text field for the hotkey
                             let response = ui.text_edit_singleline(&mut temp_hotkey);
-                        
-                            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                                // Validate the entered hotkey
-                                let valid_hotkey_pattern = r"(?i)^(ctrl|alt|shift|win)(\+(ctrl|alt|shift|win))*\+([a-z]|f[1-9]|f1[0-9]|f2[0-4]|numpad[0-9]|up|down|left|right|backspace|tab|enter|pause|capslock|escape|space|pageup|pagedown|end|home|insert|delete|oem_(plus|comma|minus|period|1|2|3|4|5|6|7)|printscreen|scrolllock|numlock|left(ctrl|shift|alt)|right(ctrl|shift|alt))$|^(?:[a-z]|f[1-9]|f1[0-9]|f2[0-4]|numpad[0-9]|up|down|left|right|backspace|tab|enter|pause|capslock|escape|space|pageup|pagedown|end|home|insert|delete|oem_(plus|comma|minus|period|1|2|3|4|5|6|7)|printscreen|scrolllock|numlock|left(ctrl|shift|alt)|right(ctrl|shift|alt))$";
-                        
-                                if let Ok(hotkey_regex) = Regex::new(valid_hotkey_pattern) {
-                                    if hotkey_regex.is_match(&temp_hotkey) {
-                                        // Valid hotkey: update the workspace and register it
-                                        if let Some(_existing_hotkey) = &workspace.hotkey {
-                                            unregister_hotkey(i as i32); // Unregister the previous hotkey
-                                        }
-                        
-                                        if !register_hotkey(i as i32, &temp_hotkey) {
-                                            warn!("Failed to set hotkey for workspace '{}'.", workspace.name);
-                                        } else {
-                                            workspace.hotkey = Some(temp_hotkey.clone());
-                                            info!("Set hotkey '{}' for workspace '{}'.", temp_hotkey, workspace.name);
-                                        }
-                                    } else {
-                                        // Invalid hotkey: revert to the previous value
-                                        warn!("Invalid hotkey string: '{}'. Keeping previous value.", temp_hotkey);
-                                        temp_hotkey = current_hotkey.clone(); // Restore the previous value
-                                    }
-                                }
+
+                            if response.changed() {
+                                // Save temporary changes back to memory
+                                ui.memory_mut(|mem| {
+                                    mem.data.insert_temp::<String>(id, temp_hotkey.clone())
+                                });
+                                info!(
+                                    "Text changed for workspace '{}', new temp_hotkey: {}",
+                                    workspace.name, temp_hotkey
+                                );
+
+                                // Reset validation result on text change
+                                validation_result = None;
+                                ui.memory_mut(|mem| {
+                                    mem.data.insert_temp::<Option<bool>>(id, validation_result)
+                                });
                             }
-                        
-                            // Update the textbox with the latest valid hotkey
-                            current_hotkey = temp_hotkey.clone();
-                            workspace.hotkey = Some(current_hotkey.clone());
+
+                            // Button to validate the entered hotkey
+                            if ui.button("Validate Hotkey").clicked() {
+                                validation_result = match workspace.set_hotkey(&temp_hotkey) {
+                                    Ok(_) => {
+                                        info!(
+                                            "Validation succeeded for workspace '{}': {}",
+                                            workspace.name, temp_hotkey
+                                        );
+                                        Some(true)
+                                    }
+                                    Err(err) => {
+                                        warn!(
+                                            "Validation failed for workspace '{}': {}",
+                                            workspace.name, err
+                                        );
+                                        Some(false)
+                                    }
+                                };
+
+                                // Store validation result
+                                ui.memory_mut(|mem| {
+                                    mem.data.insert_temp::<Option<bool>>(id, validation_result)
+                                });
+                            }
+
+                            // Display validation result indicator
+                            match validation_result {
+                                Some(true) => ui.colored_label(Color32::GREEN, "Valid"),
+                                Some(false) => ui.colored_label(Color32::RED, "Invalid"),
+                                None => ui.label("Awaiting validation..."),
+                            }
                         });
-                        
+
                         let mut window_to_delete = None;
                         for (j, window) in workspace.windows.iter_mut().enumerate() {
                             ui.horizontal(|ui| {
@@ -163,36 +205,44 @@ impl EframeApp for App {
                                 ui.add(egui::DragValue::new(&mut window.home.1).prefix("y: "));
                                 ui.add(egui::DragValue::new(&mut window.home.2).prefix("w: "));
                                 ui.add(egui::DragValue::new(&mut window.home.3).prefix("h: "));
-
+                            
                                 if ui.button("Capture Home").clicked() {
-                                    if let Some((hwnd, _)) = get_active_window() {
-                                        if let Ok((x, y, w, h)) = get_window_position(hwnd) {
-                                            window.home = (x, y, w, h);
-                                            info!(
-                                                "Captured current window position for Home: {:?}",
-                                                window.home
-                                            );
-                                        }
+                                    let hwnd = HWND(window.id as *mut std::ffi::c_void);
+                                    if let Ok((x, y, w, h)) = get_window_position(hwnd) {
+                                        window.home = (x, y, w, h);
+                                        info!(
+                                            "Captured window position for Home using window ID {:?}: {:?}",
+                                            window.id, window.home
+                                        );
+                                    } else {
+                                        warn!(
+                                            "Failed to capture window position for Home using window ID {:?}",
+                                            window.id
+                                        );
                                     }
                                 }
                             });
-
+                            
                             ui.horizontal(|ui| {
                                 ui.label("Target:");
                                 ui.add(egui::DragValue::new(&mut window.target.0).prefix("x: "));
                                 ui.add(egui::DragValue::new(&mut window.target.1).prefix("y: "));
                                 ui.add(egui::DragValue::new(&mut window.target.2).prefix("w: "));
                                 ui.add(egui::DragValue::new(&mut window.target.3).prefix("h: "));
-
+                            
                                 if ui.button("Capture Target").clicked() {
-                                    if let Some((hwnd, _)) = get_active_window() {
-                                        if let Ok((x, y, w, h)) = get_window_position(hwnd) {
-                                            window.target = (x, y, w, h);
-                                            info!(
-                                                "Captured current window position for Target: {:?}",
-                                                window.target
-                                            );
-                                        }
+                                    let hwnd = HWND(window.id as *mut std::ffi::c_void);
+                                    if let Ok((x, y, w, h)) = get_window_position(hwnd) {
+                                        window.target = (x, y, w, h);
+                                        info!(
+                                            "Captured window position for Target using window ID {:?}: {:?}",
+                                            window.id, window.target
+                                        );
+                                    } else {
+                                        warn!(
+                                            "Failed to capture window position for Target using window ID {:?}",
+                                            window.id
+                                        );
                                     }
                                 }
                             });
@@ -203,6 +253,7 @@ impl EframeApp for App {
                         }
 
                         if ui.button("Capture Active Window").clicked() {
+                            
                             if let Some("Enter") = listen_for_keys_with_dialog() {
                                 if let Some((hwnd, title)) = get_active_window() {
                                     workspace.windows.push(Window {
