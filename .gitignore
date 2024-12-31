@@ -25,4 +25,4 @@ Cargo.lock
 /target
 workspaces.json
 multi_manager.log
-
+.vscode
