@@ -4,11 +4,11 @@ use eframe::egui;
 use eframe::{self, App as EframeApp};
 use log::{info, warn};
 use poll_promise::Promise;
-use winit::window;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::HWND;
+use winit::window;
 
 #[derive(Clone)]
 pub struct App {
@@ -75,11 +75,19 @@ impl EframeApp for App {
                 ui.label("No hotkey detected yet.");
             }
 
-            ui.separator();
+            // separator();
 
             let mut workspaces = self.workspaces.lock().unwrap();
             for (i, workspace) in workspaces.iter_mut().enumerate() {
-                egui::CollapsingHeader::new(&workspace.name)
+                let header_id = egui::Id::new(format!("workspace_{}_header", i));
+                let mut is_renaming = ui.memory_mut(|mem| mem.data.get_temp::<bool>(header_id).unwrap_or(false));
+                let mut new_name = ui.memory_mut(|mem| {
+                    mem.data
+                        .get_temp::<String>(header_id.with("name"))
+                        .unwrap_or_else(|| workspace.name.clone())
+                });
+                
+                let header_response = egui::CollapsingHeader::new(&workspace.name)
                     .id_salt(i)
                     .default_open(true)
                     .show(ui, |ui| {
@@ -151,6 +159,7 @@ impl EframeApp for App {
                                 };
 
                                 // Store validation result
+
                                 ui.memory_mut(|mem| {
                                     mem.data.insert_temp::<Option<bool>>(id, validation_result)
                                 });
@@ -274,6 +283,45 @@ impl EframeApp for App {
                             info!("Deleting workspace '{}'.", workspace.name);
                         }
                     });
+
+                if header_response.header_response.hovered() && ui.input(|i| i.pointer.secondary_clicked()) {
+                    // Right-click detected on header
+                    is_renaming = true;
+                    ui.memory_mut(|mem| mem.data.insert_temp(header_id, is_renaming));
+                }
+
+                // Show a popup window for renaming the workspace
+                if is_renaming {
+                    egui::Window::new("Rename Workspace")
+                        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0]) // Center the popup
+                        .collapsible(false)
+                        .resizable(false)
+                        .show(ctx, |ui| {
+                            ui.label("Enter a new name for the workspace:");
+                            let response = ui.text_edit_singleline(&mut new_name);
+
+                            if response.changed() {
+                                ui.memory_mut(|mem| {
+                                    mem.data.insert_temp(header_id.with("name"), new_name.clone());
+                                });
+                            }
+
+                            ui.horizontal(|ui| {
+                                if ui.button("Ok").clicked() || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
+                                    // Save the new name and close the popup
+                                    workspace.name = new_name.clone();
+                                    is_renaming = false;
+                                    ui.memory_mut(|mem| mem.data.insert_temp(header_id, is_renaming));
+                                }
+
+                                if ui.button("Cancel").clicked() {
+                                    // Cancel renaming and close the popup
+                                    is_renaming = false;
+                                    ui.memory_mut(|mem| mem.data.insert_temp(header_id, is_renaming));
+                                }
+                            });
+                        });
+                }
             }
 
             if let Some(new_workspace) = new_workspace_to_add {

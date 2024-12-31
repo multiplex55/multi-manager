@@ -23,6 +23,11 @@ impl Workspace {
             Err(format!("Invalid hotkey: '{}'", hotkey))
         }
     }
+
+    /// Sets the name for the workspace.
+    pub fn set_name(&mut self, new_name: &str) {
+        self.name = new_name.to_string();
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]

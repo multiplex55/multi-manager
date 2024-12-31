@@ -228,6 +228,8 @@ pub fn toggle_workspace_windows(workspace: &mut Workspace) {
         } else {
             window.home
         };
+
+        // Move the window
         if let Err(e) = move_window(
             HWND(window.id as *mut std::ffi::c_void),
             target_position.0,
@@ -236,6 +238,21 @@ pub fn toggle_workspace_windows(workspace: &mut Workspace) {
             target_position.3,
         ) {
             warn!("Failed to move window '{}': {}", window.title, e);
+        } else {
+            info!(
+                "Moved window '{}' to position: {:?}",
+                window.title, target_position
+            );
+        }
+
+        // Activate the window
+        unsafe {
+            let hwnd = HWND(window.id as *mut std::ffi::c_void);
+            if SetForegroundWindow(hwnd).as_bool() {
+                info!("Activated window '{}'", window.title);
+            } else {
+                warn!("Failed to activate window '{}'", window.title);
+            }
         }
     }
 }
