@@ -1,4 +1,5 @@
 mod gui;
+mod utils;
 mod window_manager;
 mod workspace;
 

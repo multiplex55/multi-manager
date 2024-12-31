@@ -1,5 +1,6 @@
 use crate::window_manager::*;
 use crate::workspace::*;
+use crate::utils::*;
 use eframe::egui;
 use eframe::{self, App as EframeApp};
 use log::{info, warn};
@@ -39,13 +40,6 @@ pub fn run_gui(app: App) {
         thread::sleep(Duration::from_millis(100));
 
     });
-    
-    // hotkey_promise.try_take().
-    // thread::sleep(1000);
-
-
-    // let temp = Promise::try_take("Hotkey Checker").unwrap();
-    
 
     *app.hotkey_promise.lock().unwrap() = Some(hotkey_promise);
 
@@ -65,6 +59,7 @@ impl EframeApp for App {
             ui.horizontal(|ui| {
                 if ui.button("Save Workspaces").clicked() {
                     save_workspaces_flag = true;
+                    show_message_box("Save Workspaces Successful","Workspace Result");
                 }
 
                 if ui.button("Add New Workspace").clicked() {
@@ -119,10 +114,10 @@ impl EframeApp for App {
                                         .hotkey
                                         .clone()
                                         .unwrap_or_else(|| "None".to_string());
-                                    info!(
-                                        "Initializing temp_hotkey for workspace '{}': {}",
-                                        workspace.name, hotkey
-                                    );
+                                    // info!(
+                                    //     "Initializing temp_hotkey for workspace '{}': {}",
+                                    //     workspace.name, hotkey
+                                    // );
                                     hotkey
                                 })
                             });
@@ -162,31 +157,22 @@ impl EframeApp for App {
                                 });
                             }
 
-                            // Button to validate the entered hotkey
-                            if ui.button("Validate Hotkey").clicked() {
-                                validation_result = match workspace.set_hotkey(&temp_hotkey) {
-                                    Ok(_) => {
-                                        info!(
-                                            "Validation succeeded for workspace '{}': {}",
-                                            workspace.name, temp_hotkey
-                                        );
-                                        Some(true)
-                                    }
-                                    Err(err) => {
-                                        warn!(
-                                            "Validation failed for workspace '{}': {}",
-                                            workspace.name, err
-                                        );
-                                        Some(false)
-                                    }
-                                };
-
-                                // Store validation result
-
-                                ui.memory_mut(|mem| {
-                                    mem.data.insert_temp::<Option<bool>>(id, validation_result)
-                                });
-                            }
+                            validation_result = match workspace.set_hotkey(&temp_hotkey) {
+                                Ok(_) => {
+                                    // info!(
+                                    //     "Validation succeeded for workspace '{}': {}",
+                                    //     workspace.name, temp_hotkey
+                                    // );
+                                    Some(true)
+                                }
+                                Err(err) => {
+                                    warn!(
+                                        "Validation failed for workspace '{}': {}",
+                                        workspace.name, err
+                                    );
+                                    Some(false)
+                                }
+                            };
 
                             // Display validation result indicator
                             match validation_result {
