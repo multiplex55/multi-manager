@@ -37,7 +37,15 @@ pub fn run_gui(app: App) {
     let hotkey_promise = Promise::spawn_thread("Hotkey Checker", move || loop {
         check_hotkeys(&app_for_promise);
         thread::sleep(Duration::from_millis(100));
+
     });
+    
+    // hotkey_promise.try_take().
+    // thread::sleep(1000);
+
+
+    // let temp = Promise::try_take("Hotkey Checker").unwrap();
+    
 
     *app.hotkey_promise.lock().unwrap() = Some(hotkey_promise);
 
@@ -295,6 +303,7 @@ impl EframeApp for App {
                             info!("Deleting workspace '{}'.", workspace.name);
                         }
                     });
+
 
                 if header_response.header_response.hovered() && ui.input(|i| i.pointer.secondary_clicked()) {
                     // Right-click detected on header

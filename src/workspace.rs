@@ -39,7 +39,7 @@ fn is_valid_key_combo(input: &str) -> bool {
 
 /// Saves the current workspaces to a file in JSON format.
 pub fn save_workspaces(workspaces: &[Workspace], file_path: &str) {
-    match serde_json::to_string(workspaces) {
+    match serde_json::to_string_pretty(workspaces) {
         Ok(json) => {
             if let Err(e) =
                 File::create(file_path).and_then(|mut file| file.write_all(json.as_bytes()))
