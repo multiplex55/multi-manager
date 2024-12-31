@@ -8,6 +8,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::HWND;
+use windows::Win32::UI::WindowsAndMessaging::IsWindow;
+
 
 #[derive(Clone)]
 pub struct App {
@@ -174,24 +176,33 @@ impl EframeApp for App {
 
                         let mut window_to_delete = None;
                         for (j, window) in workspace.windows.iter_mut().enumerate() {
+                            let hwnd = HWND(window.id as *mut std::ffi::c_void); // Move HWND declaration outside the loop
+                            let exists = unsafe { IsWindow(hwnd).as_bool() };    // Check if the window exists
+                        
                             ui.horizontal(|ui| {
                                 ui.label(&window.title);
-
+                        
                                 if ui.button("Delete").clicked() {
                                     window_to_delete = Some(j);
                                     info!("Deleting window '{}'", window.title);
                                 }
+                        
+                                // Add the colored indicator for HWND validity
+                                if exists {
+                                    ui.colored_label(egui::Color32::GREEN, format!("HWND: {:?}", window.id));
+                                } else {
+                                    ui.colored_label(egui::Color32::RED, format!("HWND: {:?}", window.id));
+                                }
                             });
-
+                        
                             ui.horizontal(|ui| {
                                 ui.label("Home:");
                                 ui.add(egui::DragValue::new(&mut window.home.0).prefix("x: "));
                                 ui.add(egui::DragValue::new(&mut window.home.1).prefix("y: "));
                                 ui.add(egui::DragValue::new(&mut window.home.2).prefix("w: "));
                                 ui.add(egui::DragValue::new(&mut window.home.3).prefix("h: "));
-                            
+                        
                                 if ui.button("Capture Home").clicked() {
-                                    let hwnd = HWND(window.id as *mut std::ffi::c_void);
                                     if let Ok((x, y, w, h)) = get_window_position(hwnd) {
                                         window.home = (x, y, w, h);
                                         info!(
@@ -205,30 +216,22 @@ impl EframeApp for App {
                                         );
                                     }
                                 }
-                                
-                                
-                            if ui.button("Move to Home").clicked() {
-                                    if let Err(e) = move_window(
-                                        HWND(window.id as *mut std::ffi::c_void),
-                                        window.home.0,
-                                        window.home.1,
-                                        window.home.2,
-                                        window.home.3,
-                                    ) {
+                        
+                                if ui.button("Move to Home").clicked() {
+                                    if let Err(e) = move_window(hwnd, window.home.0, window.home.1, window.home.2, window.home.3) {
                                         warn!("Error moving window '{}': {}", window.title, e);
                                     }
                                 }
                             });
-                            
+                        
                             ui.horizontal(|ui| {
                                 ui.label("Target:");
                                 ui.add(egui::DragValue::new(&mut window.target.0).prefix("x: "));
                                 ui.add(egui::DragValue::new(&mut window.target.1).prefix("y: "));
                                 ui.add(egui::DragValue::new(&mut window.target.2).prefix("w: "));
                                 ui.add(egui::DragValue::new(&mut window.target.3).prefix("h: "));
-                            
+                        
                                 if ui.button("Capture Target").clicked() {
-                                    let hwnd = HWND(window.id as *mut std::ffi::c_void);
                                     if let Ok((x, y, w, h)) = get_window_position(hwnd) {
                                         window.target = (x, y, w, h);
                                         info!(
@@ -242,20 +245,15 @@ impl EframeApp for App {
                                         );
                                     }
                                 }
-
+                        
                                 if ui.button("Move to Target").clicked() {
-                                    if let Err(e) = move_window(
-                                        HWND(window.id as *mut std::ffi::c_void),
-                                        window.target.0,
-                                        window.target.1,
-                                        window.target.2,
-                                        window.target.3,
-                                    ) {
+                                    if let Err(e) = move_window(hwnd, window.target.0, window.target.1, window.target.2, window.target.3) {
                                         warn!("Error moving window '{}': {}", window.title, e);
                                     }
                                 }
                             });
                         }
+                        
 
                         if let Some(index) = window_to_delete {
                             workspace.windows.remove(index);
