@@ -16,7 +16,9 @@ pub struct App {
     pub workspaces: Arc<Mutex<Vec<Workspace>>>,
     pub last_hotkey_info: Arc<Mutex<Option<(String, Instant)>>>,
     pub hotkey_promise: Arc<Mutex<Option<Promise<()>>>>,
+    pub initial_validation_done: Arc<Mutex<bool>>, // New flag for initial validation
 }
+
 
 pub fn run_gui(app: App) {
     // Load workspaces and initialize
@@ -24,6 +26,7 @@ pub fn run_gui(app: App) {
         let mut workspaces = app.workspaces.lock().unwrap();
         *workspaces = load_workspaces("workspaces.json");
     }
+    app.validate_initial_hotkeys(); // Perform initial validation of hotkeys
 
     let options = eframe::NativeOptions {
         ..Default::default()
@@ -43,10 +46,11 @@ pub fn run_gui(app: App) {
 
 impl EframeApp for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+
         let mut workspace_to_delete = None;
         let mut save_workspaces_flag = false;
         let mut new_workspace_to_add: Option<Workspace> = None;
-
+        
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Multi Manager");
 
@@ -115,10 +119,20 @@ impl EframeApp for App {
                                 })
                             });
 
-                            // Validation result: use egui's memory to persist between frames
+                            // Retrieve or initialize the validation result
                             let mut validation_result = ui.memory_mut(|mem| {
-                                mem.data.get_temp::<Option<bool>>(id).unwrap_or(None)
+                                mem.data
+                                    .get_temp::<Option<bool>>(id)
+                                    .unwrap_or_else(|| {
+                                        if let Some(hotkey) = workspace.hotkey.clone() { // Clone the hotkey to avoid borrowing issues
+                                            // Use the initial validation from `validate_initial_hotkeys`
+                                            workspace.set_hotkey(&hotkey).ok().map(|_| true).or(Some(false))
+                                        } else {
+                                            None
+                                        }
+                                    })
                             });
+
 
                             // Editable text field for the hotkey
                             let response = ui.text_edit_singleline(&mut temp_hotkey);
@@ -334,6 +348,25 @@ impl EframeApp for App {
         if save_workspaces_flag {
             save_workspaces(&self.workspaces.lock().unwrap(), "workspaces.json");
             info!("Workspaces saved to file.");
+        }
+    }
+}
+
+impl App {
+    fn validate_initial_hotkeys(&self) {
+        let mut initial_validation_done = self.initial_validation_done.lock().unwrap();
+        if !*initial_validation_done {
+            let mut workspaces = self.workspaces.lock().unwrap();
+            for workspace in &mut *workspaces {
+                if let Some(hotkey) = workspace.hotkey.clone() {
+                    if workspace.set_hotkey(&hotkey).is_ok() {
+                        info!("Initial validation succeeded for hotkey '{}'.", hotkey);
+                    } else {
+                        warn!("Initial validation failed for hotkey '{}'.", hotkey);
+                    }
+                }
+            }
+            *initial_validation_done = true; // Ensure this runs only once
         }
     }
 }

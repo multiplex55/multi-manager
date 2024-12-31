@@ -17,6 +17,7 @@ fn main() {
         workspaces: Arc::new(Mutex::new(Vec::new())),
         last_hotkey_info: Arc::new(Mutex::new(None)), // Initialize to None
         hotkey_promise: Arc::new(Mutex::new(None)),   // Initialize the promise
+        initial_validation_done: Arc::new(Mutex::new(false)), // Initialize flag to false
     };
 
     gui::run_gui(app);
