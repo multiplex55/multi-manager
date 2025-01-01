@@ -156,17 +156,6 @@ impl EframeApp for App {
                                     mem.data.insert_temp::<Option<bool>>(id,None)
                                 });
                             }
-                            //TODO
-                            // // Update workspace validation dynamically
-                            // let hotkey_valid = workspace
-                            //     .hotkey
-                            //     .as_ref()
-                            //     .map_or(false, |hotkey| is_valid_key_combo(hotkey));
-                            // if hotkey_valid {
-                            //     ui.colored_label(egui::Color32::GREEN, "Valid");
-                            // } else {
-                            //     ui.colored_label(egui::Color32::RED, "Invalid");
-                            // }
 
                             let validation_result = match workspace.set_hotkey(&temp_hotkey) {
                                 Ok(_) => {
