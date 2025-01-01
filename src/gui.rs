@@ -261,7 +261,6 @@ impl EframeApp for App {
                                 }
                             });
                         }
-                        
 
                         if let Some(index) = window_to_delete {
                             workspace.windows.remove(index);
@@ -285,9 +284,17 @@ impl EframeApp for App {
                         }
 
                         if ui.button("Delete Workspace").clicked() {
-                            workspace_to_delete = Some(i);
-                            info!("Deleting workspace '{}'.", workspace.name);
+                            // Temporary comment: Add confirmation dialog before deleting the workspace
+                            let confirmation_message = format!(
+                                "Are you sure you want to delete the workspace '{}'? This action cannot be undone.",
+                                workspace.name
+                            );
+                            if show_confirmation_box(&confirmation_message, "Confirm Deletion") {
+                                workspace_to_delete = Some(i);
+                                info!("Deleting workspace '{}'.", workspace.name);
+                            }
                         }
+        
                     });
 
 
