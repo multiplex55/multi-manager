@@ -53,6 +53,7 @@ impl EframeApp for App {
         let mut save_workspaces_flag = false;
         let mut new_workspace_to_add: Option<Workspace> = None;
         
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Multi Manager");
 
@@ -83,19 +84,35 @@ impl EframeApp for App {
                 ui.label("No hotkey detected yet.");
             }
 
-            // separator();
-
             let mut workspaces = self.workspaces.lock().unwrap();
             for (i, workspace) in workspaces.iter_mut().enumerate() {
                 let header_id = egui::Id::new(format!("workspace_{}_header", i));
-                let mut is_renaming = ui.memory_mut(|mem| mem.data.get_temp::<bool>(header_id).unwrap_or(false));
+                let mut is_renaming = ui
+                    .memory_mut(|mem| mem.data.get_temp::<bool>(header_id).unwrap_or(false));
+
                 let mut new_name = ui.memory_mut(|mem| {
                     mem.data
                         .get_temp::<String>(header_id.with("wrkspce_name"))
                         .unwrap_or_else(|| workspace.name.clone())
                 });
-                
-                let header_response = egui::CollapsingHeader::new(&workspace.name)
+
+                // Check if the workspace is valid
+                let is_workspace_valid = {
+                    let hotkey_valid = workspace.hotkey.as_ref().map_or(false, |hotkey| is_valid_key_combo(hotkey));
+                    let windows_valid = workspace
+                        .windows
+                        .iter()
+                        .all(|window| unsafe { IsWindow(HWND(window.id as *mut std::ffi::c_void)).as_bool() });
+                    hotkey_valid && windows_valid
+                };
+                // Set header text color based on validity
+                let header_text = if is_workspace_valid {
+                    egui::RichText::new(&workspace.name).color(egui::Color32::GREEN)
+                } else {
+                    egui::RichText::new(&workspace.name).color(egui::Color32::RED)
+                };
+
+                let header_response = egui::CollapsingHeader::new(header_text)
                     .id_salt(i)
                     .default_open(true)
                     .show(ui, |ui| {
@@ -139,6 +156,17 @@ impl EframeApp for App {
                                     mem.data.insert_temp::<Option<bool>>(id,None)
                                 });
                             }
+                            //TODO
+                            // // Update workspace validation dynamically
+                            // let hotkey_valid = workspace
+                            //     .hotkey
+                            //     .as_ref()
+                            //     .map_or(false, |hotkey| is_valid_key_combo(hotkey));
+                            // if hotkey_valid {
+                            //     ui.colored_label(egui::Color32::GREEN, "Valid");
+                            // } else {
+                            //     ui.colored_label(egui::Color32::RED, "Invalid");
+                            // }
 
                             let validation_result = match workspace.set_hotkey(&temp_hotkey) {
                                 Ok(_) => {
