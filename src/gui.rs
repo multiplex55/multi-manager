@@ -110,32 +110,16 @@ impl EframeApp for App {
                             let id = egui::Id::new(workspace_id); // Convert workspace index to egui Id
                             let mut temp_hotkey = ui.memory_mut(|mem| {
                                 mem.data.get_temp::<String>(id).unwrap_or_else(|| {
-                                    let hotkey = workspace
+                                    workspace
                                         .hotkey
                                         .clone()
-                                        .unwrap_or_else(|| "None".to_string());
+                                        .unwrap_or_else(|| "None".to_string())
                                     // info!(
                                     //     "Initializing temp_hotkey for workspace '{}': {}",
                                     //     workspace.name, hotkey
                                     // );
-                                    hotkey
                                 })
                             });
-
-                            // Retrieve or initialize the validation result
-                            let mut validation_result = ui.memory_mut(|mem| {
-                                mem.data
-                                    .get_temp::<Option<bool>>(id)
-                                    .unwrap_or_else(|| {
-                                        if let Some(hotkey) = workspace.hotkey.clone() { // Clone the hotkey to avoid borrowing issues
-                                            // Use the initial validation from `validate_initial_hotkeys`
-                                            workspace.set_hotkey(&hotkey).ok().map(|_| true).or(Some(false))
-                                        } else {
-                                            None
-                                        }
-                                    })
-                            });
-
 
                             // Editable text field for the hotkey
                             let response = ui.text_edit_singleline(&mut temp_hotkey);
@@ -151,13 +135,12 @@ impl EframeApp for App {
                                 );
 
                                 // Reset validation result on text change
-                                validation_result = None;
                                 ui.memory_mut(|mem| {
-                                    mem.data.insert_temp::<Option<bool>>(id, validation_result)
+                                    mem.data.insert_temp::<Option<bool>>(id,None)
                                 });
                             }
 
-                            validation_result = match workspace.set_hotkey(&temp_hotkey) {
+                            let validation_result = match workspace.set_hotkey(&temp_hotkey) {
                                 Ok(_) => {
                                     // info!(
                                     //     "Validation succeeded for workspace '{}': {}",
