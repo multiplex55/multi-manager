@@ -11,7 +11,6 @@ use std::time::{Duration, Instant};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::IsWindow;
 
-
 #[derive(Clone)]
 pub struct App {
     pub workspaces: Arc<Mutex<Vec<Workspace>>>,
@@ -19,7 +18,6 @@ pub struct App {
     pub hotkey_promise: Arc<Mutex<Option<Promise<()>>>>,
     pub initial_validation_done: Arc<Mutex<bool>>, // New flag for initial validation
 }
-
 
 pub fn run_gui(app: App) {
     // Load workspaces and initialize
@@ -42,7 +40,6 @@ pub fn run_gui(app: App) {
     });
 
     *app.hotkey_promise.lock().unwrap() = Some(hotkey_promise);
-
     let _ = eframe::run_native("Multi Manager", options, Box::new(|_cc| Ok(Box::new(app))));
 }
 
@@ -52,7 +49,6 @@ impl EframeApp for App {
         let mut workspace_to_delete = None;
         let mut save_workspaces_flag = false;
         let mut new_workspace_to_add: Option<Workspace> = None;
-        
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Multi Manager");
@@ -84,7 +80,7 @@ impl EframeApp for App {
             } else {
                 ui.label("No hotkey detected yet.");
             }
-
+            ui.separator();
             let mut workspaces = self.workspaces.lock().unwrap();
             for (i, workspace) in workspaces.iter_mut().enumerate() {
                 let header_id = egui::Id::new(format!("workspace_{}_header", i));
@@ -303,7 +299,7 @@ impl EframeApp for App {
                             if ui.button("Delete Workspace").clicked() {
                                 // Temporary comment: Add confirmation dialog before deleting the workspace
                                 let confirmation_message = format!(
-                                    "Are you sure you want to delete the workspace '{}'? This action cannot be undone.",
+                                    "Are you sure you want to delete the workspace \n'{}'?\n\nThis action cannot be undone.",
                                     workspace.name
                                 );
                                 if show_confirmation_box(&confirmation_message, "Confirm Deletion") {
@@ -312,6 +308,8 @@ impl EframeApp for App {
                                 }
                             }
                         });
+
+                        ui.separator();
         
                     });
                     if header_response.header_response.hovered() && ui.input(|i| i.pointer.secondary_clicked()) {
