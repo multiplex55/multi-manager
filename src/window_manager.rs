@@ -78,6 +78,23 @@ pub fn register_hotkey(id: i32, key_sequence: &str) -> bool {
     false
 }
 
+/// Unregisters a global hotkey based on its ID.
+///
+/// # Arguments
+/// * `id` - The unique identifier of the hotkey to unregister.
+pub fn unregister_hotkey(id: i32) {
+    unsafe {
+        if UnregisterHotKey(None, id).is_ok() {
+            info!("Successfully unregistered hotkey with ID {}.", id);
+            // Remove the hotkey from the HOTKEYS map
+            let mut hotkeys = HOTKEYS.lock().unwrap();
+            hotkeys.remove(&id);
+        } else {
+            warn!("Failed to unregister hotkey with ID {}.", id);
+        }
+    }
+}
+
 // Toggles workspace windows between home and target
 pub fn toggle_workspace_windows(workspace: &mut Workspace) {
     let all_at_home = workspace.windows.iter().all(|w| {

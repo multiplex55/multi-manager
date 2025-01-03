@@ -69,6 +69,7 @@ impl EframeApp for App {
                         name: format!("Workspace {}", workspaces.len() + 1),
                         hotkey: None,
                         windows: Vec::new(),
+                        disabled: false,
                     });
                 }
             });
@@ -104,13 +105,19 @@ impl EframeApp for App {
                         .iter()
                         .all(|window| unsafe { IsWindow(HWND(window.id as *mut std::ffi::c_void)).as_bool() });
                     hotkey_valid && windows_valid
-                };
+                };   
+
                 // Set header text color based on validity
-                let header_text = if is_workspace_valid {
+                let header_text = if workspace.disabled{
+                    egui::RichText::new(&workspace.name).color(egui::Color32::ORANGE)
+                }
+                else if is_workspace_valid {
                     egui::RichText::new(&workspace.name).color(egui::Color32::GREEN)
                 } else {
                     egui::RichText::new(&workspace.name).color(egui::Color32::RED)
                 };
+
+                ui.horizontal(|ui| {
 
                 let header_response = egui::CollapsingHeader::new(header_text)
                     .id_salt(i)
@@ -194,7 +201,7 @@ impl EframeApp for App {
                                     window_to_delete = Some(j);
                                     info!("Deleting window '{}'", window.title);
                                 }
-                        
+
                                 // Add the colored indicator for HWND validity
                                 if exists {
                                     ui.colored_label(egui::Color32::GREEN, format!("HWND: {:?}", window.id));
@@ -283,60 +290,70 @@ impl EframeApp for App {
                             }
                         }
 
-                        if ui.button("Delete Workspace").clicked() {
-                            // Temporary comment: Add confirmation dialog before deleting the workspace
-                            let confirmation_message = format!(
-                                "Are you sure you want to delete the workspace '{}'? This action cannot be undone.",
-                                workspace.name
-                            );
-                            if show_confirmation_box(&confirmation_message, "Confirm Deletion") {
-                                workspace_to_delete = Some(i);
-                                info!("Deleting workspace '{}'.", workspace.name);
+                        ui.horizontal(|ui| {
+                            // Checkbox for "Disable"
+                            ui.checkbox(&mut workspace.disabled, "Disable Workspace");
+                    
+                            if workspace.disabled {
+                                unregister_hotkey(i as i32); // Unregister hotkey if disabled
+                            } else if let Some(hotkey) = &workspace.hotkey {
+                                register_hotkey(i as i32, hotkey); // Re-register hotkey if re-enabled
                             }
-                        }
+
+                            if ui.button("Delete Workspace").clicked() {
+                                // Temporary comment: Add confirmation dialog before deleting the workspace
+                                let confirmation_message = format!(
+                                    "Are you sure you want to delete the workspace '{}'? This action cannot be undone.",
+                                    workspace.name
+                                );
+                                if show_confirmation_box(&confirmation_message, "Confirm Deletion") {
+                                    workspace_to_delete = Some(i);
+                                    info!("Deleting workspace '{}'.", workspace.name);
+                                }
+                            }
+                        });
         
                     });
-
-
-                if header_response.header_response.hovered() && ui.input(|i| i.pointer.secondary_clicked()) {
-                    // Right-click detected on header
-                    is_renaming = true;
-                    ui.memory_mut(|mem| mem.data.insert_temp(header_id, is_renaming));
-                }
-
-                // Show a popup window for renaming the workspace
-                if is_renaming {
-                    egui::Window::new("Rename Workspace")
-                        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0]) // Center the popup
-                        .collapsible(false)
-                        .resizable(false)
-                        .show(ctx, |ui| {
-                            ui.label("Enter a new name for the workspace:");
-                            let response = ui.text_edit_singleline(&mut new_name);
-
-                            if response.changed() {
-                                ui.memory_mut(|mem| {
-                                    mem.data.insert_temp(header_id.with("wrkspce_name"), new_name.clone());
+                    if header_response.header_response.hovered() && ui.input(|i| i.pointer.secondary_clicked()) {
+                        // Right-click detected on header
+                        is_renaming = true;
+                        ui.memory_mut(|mem| mem.data.insert_temp(header_id, is_renaming));
+                    }
+    
+                    // Show a popup window for renaming the workspace
+                    if is_renaming {
+                        egui::Window::new("Rename Workspace")
+                            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0]) // Center the popup
+                            .collapsible(false)
+                            .resizable(false)
+                            .show(ctx, |ui| {
+                                ui.label("Enter a new name for the workspace:");
+                                let response = ui.text_edit_singleline(&mut new_name);
+    
+                                if response.changed() {
+                                    ui.memory_mut(|mem| {
+                                        mem.data.insert_temp(header_id.with("wrkspce_name"), new_name.clone());
+                                    });
+                                }
+    
+                                ui.horizontal(|ui| {
+                                    if ui.button("Ok").clicked() || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
+                                        // Save the new name and close the popup
+                                        workspace.name = new_name.clone();
+                                        is_renaming = false;
+                                        ui.memory_mut(|mem| mem.data.insert_temp(header_id, is_renaming));
+                                    }
+    
+                                    if ui.button("Cancel").clicked() {
+                                        // Cancel renaming and close the popup
+                                        is_renaming = false;
+                                        ui.memory_mut(|mem| mem.data.insert_temp(header_id, is_renaming));
+                                    }
                                 });
-                            }
-
-                            ui.horizontal(|ui| {
-                                if ui.button("Ok").clicked() || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
-                                    // Save the new name and close the popup
-                                    workspace.name = new_name.clone();
-                                    is_renaming = false;
-                                    ui.memory_mut(|mem| mem.data.insert_temp(header_id, is_renaming));
-                                }
-
-                                if ui.button("Cancel").clicked() {
-                                    // Cancel renaming and close the popup
-                                    is_renaming = false;
-                                    ui.memory_mut(|mem| mem.data.insert_temp(header_id, is_renaming));
-                                }
                             });
-                        });
-                }
-            }
+                    }
+                });
+            }//Per Workspace
 
             if let Some(new_workspace) = new_workspace_to_add {
                 workspaces.push(new_workspace);
@@ -378,6 +395,11 @@ fn check_hotkeys(app: &App) {
     let workspaces = app.workspaces.lock().unwrap();
 
     for (i, workspace) in workspaces.iter().enumerate() {
+
+        if workspace.disabled {
+            continue;
+        }
+
         if let Some(ref hotkey) = workspace.hotkey {
             if is_hotkey_pressed(hotkey) {
                 info!(

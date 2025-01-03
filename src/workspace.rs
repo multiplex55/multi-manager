@@ -10,6 +10,7 @@ pub struct Workspace {
     pub name: String,
     pub hotkey: Option<String>,
     pub windows: Vec<Window>,
+    pub disabled: bool,
 }
 
 impl Workspace {
