@@ -5,10 +5,19 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 /// Displays a message box with the specified message and title.
 ///
-/// # Arguments
+/// This function is used to show informational messages to the user.
 ///
-/// * `message` - The message string to display in the message box.
-/// * `title` - The title string for the message box.
+/// # Arguments
+/// - `message`: The content of the message to be displayed.
+/// - `title`: The title of the message box.
+///
+/// # Example
+/// ```
+/// show_message_box("Operation successful!", "Info");
+/// ```
+///
+/// # Platform-Specific Notes
+/// - This function uses the Windows API, so it is only supported on Windows.
 pub fn show_message_box(message: &str, title: &str) {
     unsafe {
         MessageBoxW(
@@ -31,7 +40,30 @@ pub fn show_message_box(message: &str, title: &str) {
         );
     }
 }
-/// Displays a confirmation dialog box and returns true if "Yes" is clicked.
+
+/// Displays a confirmation dialog box with "Yes" and "No" options.
+///
+/// This function prompts the user for confirmation and returns `true` if "Yes" is clicked.
+///
+/// # Arguments
+/// - `message`: The content of the confirmation message.
+/// - `title`: The title of the confirmation dialog box.
+///
+/// # Returns
+/// - `true` if the user selects "Yes".
+/// - `false` if the user selects "No".
+///
+/// # Example
+/// ```
+/// if show_confirmation_box("Are you sure?", "Confirm Action") {
+///     println!("User confirmed!");
+/// } else {
+///     println!("User declined.");
+/// }
+/// ```
+///
+/// # Platform-Specific Notes
+/// - This function uses the Windows API, so it is only supported on Windows.
 pub fn show_confirmation_box(message: &str, title: &str) -> bool {
     unsafe {
         let result = MessageBoxW(

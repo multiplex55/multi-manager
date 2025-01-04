@@ -12,7 +12,21 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 // Static hotkeys map
 static HOTKEYS: Lazy<Mutex<HashMap<i32, usize>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
-/// Checks if a hotkey is pressed based on the key sequence string
+/// Checks if a hotkey is pressed based on the key sequence string.
+///
+/// # Arguments
+/// - `key_sequence`: The key sequence string (e.g., "Ctrl+Alt+H") to check.
+///
+/// # Returns
+/// - `true` if the hotkey is currently pressed.
+/// - `false` otherwise.
+///
+/// # Example
+/// ```
+/// if is_hotkey_pressed("Ctrl+Shift+P") {
+///     println!("Hotkey pressed!");
+/// }
+/// ```
 pub fn is_hotkey_pressed(key_sequence: &str) -> bool {
     let mut modifiers_pressed = true;
     let mut vk_code: Option<u32> = None;
@@ -43,7 +57,22 @@ pub fn is_hotkey_pressed(key_sequence: &str) -> bool {
     }
 }
 
-// Registers a global hotkey for a workspace
+/// Registers a global hotkey for a workspace.
+///
+/// # Arguments
+/// - `id`: The unique identifier for the hotkey.
+/// - `key_sequence`: The key sequence string (e.g., "Ctrl+Alt+H") to register.
+///
+/// # Returns
+/// - `true` if the hotkey was successfully registered.
+/// - `false` otherwise.
+///
+/// # Example
+/// ```
+/// if register_hotkey(1, "Ctrl+Shift+P") {
+///     println!("Hotkey registered!");
+/// }
+/// ```
 pub fn register_hotkey(id: i32, key_sequence: &str) -> bool {
     let mut modifiers: u32 = 0;
     let mut vk_code: Option<u32> = None;
@@ -81,7 +110,12 @@ pub fn register_hotkey(id: i32, key_sequence: &str) -> bool {
 /// Unregisters a global hotkey based on its ID.
 ///
 /// # Arguments
-/// * `id` - The unique identifier of the hotkey to unregister.
+/// - `id`: The unique identifier of the hotkey to unregister.
+///
+/// # Example
+/// ```
+/// unregister_hotkey(1);
+/// ```
 pub fn unregister_hotkey(id: i32) {
     unsafe {
         if UnregisterHotKey(None, id).is_ok() {
@@ -95,7 +129,18 @@ pub fn unregister_hotkey(id: i32) {
     }
 }
 
-// Toggles workspace windows between home and target
+/// Toggles workspace windows between their home and target locations.
+///
+/// # Arguments
+/// - `workspace`: The workspace to toggle windows for.
+///
+/// - If all windows are at their home positions, they are moved to their target positions.
+/// - If any window is not at its home or target position, it is moved to its home position.
+///
+/// # Example
+/// ```
+/// toggle_workspace_windows(&mut workspace);
+/// ```
 pub fn toggle_workspace_windows(workspace: &mut Workspace) {
     let all_at_home = workspace.windows.iter().all(|w| {
         is_window_at_position(
@@ -142,7 +187,23 @@ pub fn toggle_workspace_windows(workspace: &mut Workspace) {
     }
 }
 
-// Checks if a window is at the specified position
+/// Checks if a window is at the specified position.
+///
+/// # Arguments
+/// - `hwnd`: The handle to the window.
+/// - `x`, `y`: The top-left coordinates of the position.
+/// - `w`, `h`: The width and height of the position.
+///
+/// # Returns
+/// - `true` if the window matches the specified position.
+/// - `false` otherwise.
+///
+/// # Example
+/// ```
+/// if is_window_at_position(hwnd, 0, 0, 800, 600) {
+///     println!("Window is at the correct position.");
+/// }
+/// ```
 fn is_window_at_position(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) -> bool {
     if let Ok((wx, wy, ww, wh)) = get_window_position(hwnd) {
         wx == x && wy == y && ww == w && wh == h
@@ -151,7 +212,21 @@ fn is_window_at_position(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) -> bool {
     }
 }
 
-// Retrieves the current position and size of a window
+/// Retrieves the current position and size of a window.
+///
+/// # Arguments
+/// - `hwnd`: The handle to the window.
+///
+/// # Returns
+/// - A tuple `(x, y, width, height)` representing the window's position and size.
+/// - `Err` if the window position cannot be retrieved.
+///
+/// # Example
+/// ```
+/// if let Ok((x, y, w, h)) = get_window_position(hwnd) {
+///     println!("Window position: ({}, {}, {}, {})", x, y, w, h);
+/// }
+/// ```
 pub fn get_window_position(hwnd: HWND) -> Result<(i32, i32, i32, i32)> {
     unsafe {
         let mut rect = RECT::default();
@@ -168,7 +243,20 @@ pub fn get_window_position(hwnd: HWND) -> Result<(i32, i32, i32, i32)> {
     }
 }
 
-// Converts a string to a virtual key code
+/// Converts a string to a virtual key code.
+///
+/// # Arguments
+/// - `key`: The key string (e.g., "A", "F1", "Ctrl").
+///
+/// # Returns
+/// - The virtual key code as `Option<u32>`.
+///
+/// # Example
+/// ```
+/// if let Some(vk) = virtual_key_from_string("Ctrl") {
+///     println!("Virtual key code: {}", vk);
+/// }
+/// ```
 fn virtual_key_from_string(key: &str) -> Option<u32> {
     match key.to_uppercase().as_str() {
         // Function keys
@@ -307,7 +395,18 @@ fn virtual_key_from_string(key: &str) -> Option<u32> {
     }
 }
 
-// Retrieves the currently active window and its title
+/// Retrieves the currently active window and its title.
+///
+/// # Returns
+/// - A tuple `(HWND, String)` representing the active window's handle and title.
+/// - `None` if no active window is found.
+///
+/// # Example
+/// ```
+/// if let Some((hwnd, title)) = get_active_window() {
+///     println!("Active window: {} ({:?})", title, hwnd);
+/// }
+/// ```
 pub fn get_active_window() -> Option<(HWND, String)> {
     unsafe {
         let hwnd = GetForegroundWindow();
@@ -324,7 +423,23 @@ pub fn get_active_window() -> Option<(HWND, String)> {
     }
 }
 
-// Moves a window to a specific position and size
+/// Moves a window to a specific position and size.
+///
+/// # Arguments
+/// - `hwnd`: The handle to the window.
+/// - `x`, `y`: The new top-left position of the window.
+/// - `w`, `h`: The new width and height of the window.
+///
+/// # Returns
+/// - `Ok(())` if the window was successfully moved.
+/// - `Err` otherwise.
+///
+/// # Example
+/// ```
+/// if let Err(e) = move_window(hwnd, 100, 100, 800, 600) {
+///     println!("Failed to move window: {}", e);
+/// }
+/// ```
 pub fn move_window(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) -> Result<()> {
     unsafe {
         SetWindowPos(hwnd, HWND_TOP, x, y, w, h, SWP_NOZORDER)?;
@@ -336,7 +451,18 @@ pub fn move_window(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) -> Result<()> {
     }
 }
 
-// Listens for key input to confirm or cancel an action
+/// Listens for key input to confirm or cancel an action.
+///
+/// # Returns
+/// - `"Enter"` if the Enter key is pressed.
+/// - `"Esc"` if the Escape key is pressed.
+///
+/// # Example
+/// ```
+/// if let Some(action) = listen_for_keys_with_dialog() {
+///     println!("User selected action: {}", action);
+/// }
+/// ```
 pub fn listen_for_keys_with_dialog() -> Option<&'static str> {
     unsafe {
         let message = "Press Enter to confirm or Escape to cancel.";

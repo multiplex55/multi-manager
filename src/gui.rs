@@ -19,6 +19,14 @@ pub struct App {
     pub initial_validation_done: Arc<Mutex<bool>>, // New flag for initial validation
 }
 
+/// Launches the application GUI and manages the lifecycle of the application.
+///
+/// - Loads workspaces from the saved file (`workspaces.json`).
+/// - Starts a background thread to monitor hotkey presses.
+/// - Launches the GUI using `eframe`.
+///
+/// # Arguments
+/// * `app` - The application state encapsulated in an `App` struct.
 pub fn run_gui(app: App) {
     // Load workspaces and initialize
     {
@@ -44,6 +52,16 @@ pub fn run_gui(app: App) {
 }
 
 impl EframeApp for App {
+    /// Updates the GUI layout and handles user interactions.
+    ///
+    /// - Displays the list of workspaces and their details.
+    /// - Allows users to add, edit, disable, or delete workspaces.
+    /// - Handles workspace hotkey assignment and validation.
+    /// - Saves workspaces to a file when requested.
+    ///
+    /// # Arguments
+    /// * `ctx` - The egui context for rendering the GUI.
+    /// * `_frame` - The frame provided by eframe for managing the application window.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
 
         let mut workspace_to_delete = None;
@@ -370,6 +388,12 @@ impl EframeApp for App {
 }
 
 impl App {
+    /// Validates all hotkeys associated with the workspaces during application startup.
+    ///
+    /// - Ensures that hotkeys are valid and registerable.
+    /// - Logs the status of each hotkey validation.
+    ///
+    /// This function is intended to run only once at startup.
     fn validate_initial_hotkeys(&self) {
         let mut initial_validation_done = self.initial_validation_done.lock().unwrap();
         if !*initial_validation_done {
@@ -388,6 +412,14 @@ impl App {
     }
 }
 
+/// Checks for pressed hotkeys and toggles the associated workspaces.
+///
+/// - Iterates through all registered workspaces.
+/// - Skips disabled workspaces.
+/// - Toggles windows for any workspace whose hotkey is pressed.
+///
+/// # Arguments
+/// * `app` - The application state encapsulated in an `App` struct.
 fn check_hotkeys(app: &App) {
     let mut workspaces_to_toggle = Vec::new();
     let workspaces = app.workspaces.lock().unwrap();
