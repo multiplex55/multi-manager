@@ -14,6 +14,7 @@ use windows::Win32::UI::WindowsAndMessaging::IsWindow;
 
 #[derive(Clone)]
 pub struct App {
+    pub app_title_name: String,
     pub workspaces: Arc<Mutex<Vec<Workspace>>>,
     pub last_hotkey_info: Arc<Mutex<Option<(String, Instant)>>>,
     pub hotkey_promise: Arc<Mutex<Option<Promise<()>>>>,
@@ -34,6 +35,7 @@ pub fn run_gui(app: App) {
         let mut workspaces = app.workspaces.lock().unwrap();
         *workspaces = load_workspaces("workspaces.json", &app);
     }
+
     app.validate_initial_hotkeys(); // Perform initial validation of hotkeys
 
     let options = eframe::NativeOptions {
@@ -49,7 +51,7 @@ pub fn run_gui(app: App) {
     });
 
     *app.hotkey_promise.lock().unwrap() = Some(hotkey_promise);
-    let _ = eframe::run_native("Multi Manager", options, Box::new(|_cc| Ok(Box::new(app))));
+    let _ = eframe::run_native(&app.app_title_name.clone(), options, Box::new(|_cc| Ok(Box::new(app))));
 }
 
 impl EframeApp for App {
@@ -299,13 +301,19 @@ impl EframeApp for App {
                             
                             if let Some("Enter") = listen_for_keys_with_dialog() {
                                 if let Some((hwnd, title)) = get_active_window() {
-                                    workspace.windows.push(Window {
-                                        id: hwnd.0 as usize,
-                                        title: title.clone(),
-                                        home: (0, 0, 800, 600),
-                                        target: (0, 0, 800, 600),
-                                        valid: false
-                                    });
+                                    if !title.contains(&self.app_title_name){
+                                        workspace.windows.push(Window {
+                                            id: hwnd.0 as usize,
+                                            title: title.clone(),
+                                            home: (0, 0, 800, 600),
+                                            target: (0, 0, 800, 600),
+                                            valid: false
+                                        });
+                                    }
+                                    else{
+                                        show_message_box("Can not capture window that contains app name for safety", "Capture Info");
+                                        info!("Capture was potentially the app name");
+                                    }
                                     info!("Captured active window: '{}'.", title);
                                 }
                             } else {

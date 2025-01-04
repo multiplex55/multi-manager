@@ -33,6 +33,7 @@ fn main() {
 
     // Initialize the application states
     let app = gui::App {
+        app_title_name: "Multi Manager".to_string(),
         workspaces: Arc::new(Mutex::new(Vec::new())),
         last_hotkey_info: Arc::new(Mutex::new(None)), // Initialize to None
         hotkey_promise: Arc::new(Mutex::new(None)),   // Initialize the promise

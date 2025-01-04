@@ -1,9 +1,6 @@
 use crate::gui::App;
 use crate::workspace::Workspace;
 use log::{error, info, warn};
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
-use std::sync::Mutex;
 use windows::core::{Result, PCWSTR};
 use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
