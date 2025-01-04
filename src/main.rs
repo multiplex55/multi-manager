@@ -4,6 +4,7 @@ mod window_manager;
 mod workspace;
 
 use log::info;
+use std::collections::HashMap;
 use std::env;
 use std::sync::{Arc, Mutex};
 
@@ -33,6 +34,7 @@ fn main() {
         last_hotkey_info: Arc::new(Mutex::new(None)), // Initialize to None
         hotkey_promise: Arc::new(Mutex::new(None)),   // Initialize the promise
         initial_validation_done: Arc::new(Mutex::new(false)), // Initialize flag to false
+        registered_hotkeys: Arc::new(Mutex::new(HashMap::new())), // Initialize the map
     };
 
     // Launch GUI

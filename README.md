@@ -15,6 +15,9 @@ Multi Manager is a robust workspace and window management application built usin
 - **Validation System**:
   - Validate hotkey configurations at startup and during updates.
   - Indicate the validity of hotkeys in real-time.
+- **Valid Window Filtering**:
+  - Only valid windows (as determined by `IsWindow`) are considered for operations.
+  - Invalid windows are ignored, preventing unnecessary errors.
 - **Persistent Storage**:
   - Save and load workspace configurations in JSON format.
   - Pretty-printed JSON for easy manual editing.
@@ -47,6 +50,8 @@ Multi Manager is a robust workspace and window management application built usin
   Includes utility functions like `show_message_box` for displaying dialog boxes.
 - **Hotkey Management**:
   Uses the `windows` crate to register, validate, and handle global hotkeys.
+- **Window Validity Filtering**:
+  Filters invalid windows during operations like position checks and toggling.
 
 ---
 
@@ -96,6 +101,9 @@ Multi Manager is a robust workspace and window management application built usin
 3. **Move Windows**:
    - "Move to Home" relocates the window to its recorded home position.
    - "Move to Target" relocates the window to its target position.
+4. **Valid Window Filtering**:
+   - Only valid windows (as determined by the `IsWindow` API) are displayed and operated on.
+   - Invalid windows are marked with a red indicator and ignored during toggles or moves.
 
 ### Hotkey Management
 
@@ -192,3 +200,4 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 - Adjust logging levels for detailed debugging.
 
 ---
+

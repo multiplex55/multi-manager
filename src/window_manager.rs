@@ -1,3 +1,4 @@
+use crate::gui::App;
 use crate::workspace::Workspace;
 use log::{error, info, warn};
 use once_cell::sync::Lazy;
@@ -8,9 +9,6 @@ use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
-
-// Static hotkeys map
-static HOTKEYS: Lazy<Mutex<HashMap<i32, usize>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 /// Checks if a hotkey is pressed based on the key sequence string.
 ///
@@ -60,6 +58,7 @@ pub fn is_hotkey_pressed(key_sequence: &str) -> bool {
 /// Registers a global hotkey for a workspace.
 ///
 /// # Arguments
+/// - `app`: Reference to the `App` struct for tracking registered hotkeys.
 /// - `id`: The unique identifier for the hotkey.
 /// - `key_sequence`: The key sequence string (e.g., "Ctrl+Alt+H") to register.
 ///
@@ -73,7 +72,16 @@ pub fn is_hotkey_pressed(key_sequence: &str) -> bool {
 ///     println!("Hotkey registered!");
 /// }
 /// ```
-pub fn register_hotkey(id: i32, key_sequence: &str) -> bool {
+pub fn register_hotkey(app: &App, id: i32, key_sequence: &str) -> bool {
+    // Check if the hotkey is already registered
+    let registered_hotkeys = app.registered_hotkeys.lock().unwrap();
+    if registered_hotkeys.contains_key(key_sequence) {
+        // warn!("Hotkey '{}' is already registered.", key_sequence);
+        return false;
+    }
+    drop(registered_hotkeys); // Release lock early
+
+    // Proceed with normal registration
     let mut modifiers: u32 = 0;
     let mut vk_code: Option<u32> = None;
 
@@ -92,8 +100,10 @@ pub fn register_hotkey(id: i32, key_sequence: &str) -> bool {
     if let Some(vk) = vk_code {
         unsafe {
             if RegisterHotKey(None, id, HOT_KEY_MODIFIERS(modifiers), vk).is_ok() {
-                let mut hotkeys = HOTKEYS.lock().unwrap();
-                hotkeys.insert(id, id as usize);
+                // Update the registered hotkeys map
+                let mut registered_hotkeys = app.registered_hotkeys.lock().unwrap();
+                registered_hotkeys.insert(key_sequence.to_string(), id as usize);
+
                 info!("Registered hotkey '{}' with ID {}.", key_sequence, id);
                 return true;
             } else {
@@ -110,23 +120,55 @@ pub fn register_hotkey(id: i32, key_sequence: &str) -> bool {
 /// Unregisters a global hotkey based on its ID.
 ///
 /// # Arguments
+/// - `app`: Reference to the `App` struct for tracking registered hotkeys.
 /// - `id`: The unique identifier of the hotkey to unregister.
 ///
 /// # Example
 /// ```
-/// unregister_hotkey(1);
+/// unregister_hotkey(&app, 1);
 /// ```
-pub fn unregister_hotkey(id: i32) {
+pub fn unregister_hotkey(app: &App, id: i32) {
     unsafe {
         if UnregisterHotKey(None, id).is_ok() {
             info!("Successfully unregistered hotkey with ID {}.", id);
-            // Remove the hotkey from the HOTKEYS map
-            let mut hotkeys = HOTKEYS.lock().unwrap();
-            hotkeys.remove(&id);
+
+            // First, find the key associated with the ID
+            let key_to_remove = {
+                let registered_hotkeys = app.registered_hotkeys.lock().unwrap();
+                registered_hotkeys
+                    .iter()
+                    .find(|(_, &v)| v == id as usize)
+                    .map(|(key, _)| key.clone()) // Clone the key to avoid borrowing issues
+            };
+
+            // Now remove the key from the map if it exists
+            if let Some(key) = key_to_remove {
+                let mut registered_hotkeys = app.registered_hotkeys.lock().unwrap();
+                registered_hotkeys.remove(&key);
+                info!("Removed hotkey '{}' from the registry.", key);
+            }
         } else {
             warn!("Failed to unregister hotkey with ID {}.", id);
         }
     }
+}
+
+/// Checks if all valid windows in a workspace are at their home positions.
+///
+/// # Arguments
+/// - `workspace`: The workspace whose windows are being checked.
+///
+/// # Returns
+/// - `true` if all valid windows are at their home positions.
+/// - `false` otherwise.
+pub fn are_all_windows_at_home(workspace: &Workspace) -> bool {
+    workspace.windows.iter().filter(|w| w.valid).all(|w| {
+        let hwnd = HWND(w.id as *mut std::ffi::c_void);
+        unsafe {
+            IsWindow(hwnd).as_bool()
+                && is_window_at_position(hwnd, w.home.0, w.home.1, w.home.2, w.home.3)
+        }
+    })
 }
 
 /// Toggles workspace windows between their home and target locations.
@@ -142,17 +184,20 @@ pub fn unregister_hotkey(id: i32) {
 /// toggle_workspace_windows(&mut workspace);
 /// ```
 pub fn toggle_workspace_windows(workspace: &mut Workspace) {
-    let all_at_home = workspace.windows.iter().all(|w| {
-        is_window_at_position(
-            HWND(w.id as *mut std::ffi::c_void),
-            w.home.0,
-            w.home.1,
-            w.home.2,
-            w.home.3,
-        )
-    });
+    let all_at_home = are_all_windows_at_home(workspace);
+    info!("DEBUG all_at_home {}", all_at_home);
 
     for window in &workspace.windows {
+        let hwnd = HWND(window.id as *mut std::ffi::c_void);
+
+        // Check if the window is valid
+        unsafe {
+            if !IsWindow(hwnd).as_bool() {
+                warn!("Skipping invalid window '{}'.", window.title);
+                continue;
+            }
+        }
+
         let target_position = if all_at_home {
             window.target
         } else {

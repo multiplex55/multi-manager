@@ -5,6 +5,7 @@ use eframe::egui;
 use eframe::{self, App as EframeApp};
 use log::{info, warn};
 use poll_promise::Promise;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -17,6 +18,7 @@ pub struct App {
     pub last_hotkey_info: Arc<Mutex<Option<(String, Instant)>>>,
     pub hotkey_promise: Arc<Mutex<Option<Promise<()>>>>,
     pub initial_validation_done: Arc<Mutex<bool>>, // New flag for initial validation
+    pub registered_hotkeys: Arc<Mutex<HashMap<String, usize>>>, // Tracks registered hotkeys
 }
 
 /// Launches the application GUI and manages the lifecycle of the application.
@@ -28,10 +30,9 @@ pub struct App {
 /// # Arguments
 /// * `app` - The application state encapsulated in an `App` struct.
 pub fn run_gui(app: App) {
-    // Load workspaces and initialize
     {
         let mut workspaces = app.workspaces.lock().unwrap();
-        *workspaces = load_workspaces("workspaces.json");
+        *workspaces = load_workspaces("workspaces.json", &app);
     }
     app.validate_initial_hotkeys(); // Perform initial validation of hotkeys
 
@@ -84,6 +85,7 @@ impl EframeApp for App {
                         hotkey: None,
                         windows: Vec::new(),
                         disabled: false,
+                        valid: false
                     });
                 }
             });
@@ -113,13 +115,19 @@ impl EframeApp for App {
 
                 // Check if the workspace is valid
                 let is_workspace_valid = {
-                    let hotkey_valid = workspace.hotkey.as_ref().map_or(false, |hotkey| is_valid_key_combo(hotkey));
-                    let windows_valid = workspace
-                        .windows
-                        .iter()
-                        .all(|window| unsafe { IsWindow(HWND(window.id as *mut std::ffi::c_void)).as_bool() });
-                    hotkey_valid && windows_valid
-                };   
+                    let hotkey_valid = workspace
+                        .hotkey
+                        .as_ref()
+                        .map_or(false, |hotkey| is_valid_key_combo(hotkey));
+
+                    let any_valid_window = workspace.windows.iter().any(|window| {
+                        unsafe { IsWindow(HWND(window.id as *mut std::ffi::c_void)).as_bool() }
+                    });
+
+                    hotkey_valid && any_valid_window
+                };
+
+                workspace.valid = is_workspace_valid;
 
                 // Set header text color based on validity
                 let header_text = if workspace.disabled{
@@ -207,7 +215,7 @@ impl EframeApp for App {
                         for (j, window) in workspace.windows.iter_mut().enumerate() {
                             let hwnd = HWND(window.id as *mut std::ffi::c_void); // Move HWND declaration outside the loop
                             let exists = unsafe { IsWindow(hwnd).as_bool() };    // Check if the window exists
-                        
+                            window.valid = exists;
                             ui.horizontal(|ui| {
                                 ui.label(&window.title);
                         
@@ -296,6 +304,7 @@ impl EframeApp for App {
                                         title: title.clone(),
                                         home: (0, 0, 800, 600),
                                         target: (0, 0, 800, 600),
+                                        valid: false
                                     });
                                     info!("Captured active window: '{}'.", title);
                                 }
@@ -308,10 +317,10 @@ impl EframeApp for App {
                             // Checkbox for "Disable"
                             ui.checkbox(&mut workspace.disabled, "Disable Workspace");
                     
-                            if workspace.disabled {
-                                unregister_hotkey(i as i32); // Unregister hotkey if disabled
+                            if workspace.disabled{
+                                unregister_hotkey(self,i as i32); // Unregister hotkey if disabled
                             } else if let Some(hotkey) = &workspace.hotkey {
-                                register_hotkey(i as i32, hotkey); // Re-register hotkey if re-enabled
+                                register_hotkey(self,i as i32, hotkey); // Re-register hotkey if re-enabled
                             }
 
                             if ui.button("Delete Workspace").clicked() {

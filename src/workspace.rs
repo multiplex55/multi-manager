@@ -1,3 +1,4 @@
+use crate::gui::App;
 use crate::window_manager::register_hotkey;
 use log::{error, info, warn};
 use regex::Regex;
@@ -18,6 +19,7 @@ pub struct Workspace {
     pub hotkey: Option<String>,
     pub windows: Vec<Window>,
     pub disabled: bool,
+    pub valid: bool,
 }
 
 impl Workspace {
@@ -62,6 +64,7 @@ pub struct Window {
     pub title: String,
     pub home: (i32, i32, i32, i32),
     pub target: (i32, i32, i32, i32),
+    pub valid: bool,
 }
 
 /// Validates if a key combination string is in a valid format.
@@ -116,19 +119,36 @@ pub fn save_workspaces(workspaces: &[Workspace], file_path: &str) {
 
 /// Loads a list of workspaces from a JSON file.
 ///
-/// If the file does not exist or is invalid, an empty workspace list is returned.
+/// This function reads a JSON file containing workspace configurations and attempts to register
+/// the hotkeys associated with each workspace using the provided `App` instance. If the file does
+/// not exist or contains invalid data, an empty workspace list is returned. Hotkeys that cannot be
+/// registered are logged as warnings.
 ///
 /// # Arguments
 /// - `file_path`: The path to the file to load workspaces from.
+/// - `app`: A reference to the `App` instance used to manage registered hotkeys.
 ///
 /// # Returns
-/// - A `Vec<Workspace>` containing the loaded workspaces.
+/// - A `Vec<Workspace>` containing the loaded workspaces, with their hotkeys registered if possible.
+/// - An empty vector if the file is missing or invalid.
+///
+/// # Behavior
+/// - If a workspace's hotkey is valid and not already registered, it is registered successfully.
+/// - If a hotkey fails to register, a warning is logged but the workspace is still included in the list.
 ///
 /// # Example
+/// ```rust
+/// let app = App {
+///     workspaces: Arc::new(Mutex::new(Vec::new())),
+///     last_hotkey_info: Arc::new(Mutex::new(None)),
+///     hotkey_promise: Arc::new(Mutex::new(None)),
+///     initial_validation_done: Arc::new(Mutex::new(false)),
+///     registered_hotkeys: Arc::new(Mutex::new(HashMap::new())),
+/// };
+///
+/// let workspaces = load_workspaces("workspaces.json", &app);
 /// ```
-/// let workspaces = load_workspaces("workspaces.json");
-/// ```/// Loads workspaces from a JSON file. Returns an empty vector if the file does not exist or cannot be read.
-pub fn load_workspaces(file_path: &str) -> Vec<Workspace> {
+pub fn load_workspaces(file_path: &str, app: &App) -> Vec<Workspace> {
     let mut content = String::new();
     match File::open(file_path) {
         Ok(mut file) => {
@@ -142,7 +162,7 @@ pub fn load_workspaces(file_path: &str) -> Vec<Workspace> {
 
                     for (i, workspace) in workspaces.iter_mut().enumerate() {
                         if let Some(ref hotkey) = workspace.hotkey {
-                            if !register_hotkey(i as i32, hotkey) {
+                            if !register_hotkey(app, i as i32, hotkey) {
                                 warn!(
                                     "Failed to register hotkey '{}' for workspace '{}'.",
                                     hotkey, workspace.name
