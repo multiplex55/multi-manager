@@ -2,6 +2,8 @@
 
 Multi Manager is a robust workspace and window management application built using Rust. It provides an intuitive GUI to manage multiple workspaces, allowing users to capture, organize, and manipulate application windows. This tool is ideal for power users, developers, and anyone looking to optimize their multitasking workflow.
 
+https://github.com/user-attachments/assets/452cc353-c795-428a-a3e7-dca2cd9c3ce0
+
 ---
 
 ## Features
