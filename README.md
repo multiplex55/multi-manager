@@ -28,6 +28,9 @@ https://github.com/user-attachments/assets/452cc353-c795-428a-a3e7-dca2cd9c3ce0
   - Popup dialogs for feedback (e.g., workspace saved successfully).
 - **Customization**: Easily extendable code for additional features.
 
+![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)
+
 ---
 
 ## How It Works
