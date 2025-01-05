@@ -2,6 +2,7 @@ use crate::window_manager::*;
 use crate::workspace::*;
 use crate::utils::*;
 use eframe::egui;
+use eframe::egui::ViewportBuilder;
 use eframe::{self, App as EframeApp};
 use log::{info, warn};
 use poll_promise::Promise;
@@ -11,6 +12,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::IsWindow;
+use eframe::NativeOptions;
+use crate::gui::egui::IconData;
 
 #[derive(Clone)]
 pub struct App {
@@ -38,10 +41,6 @@ pub fn run_gui(app: App) {
 
     app.validate_initial_hotkeys(); // Perform initial validation of hotkeys
 
-    let options = eframe::NativeOptions {
-        ..Default::default()
-    };
-
     // Start hotkey checker in a background thread with PollPromise
     let app_for_promise = app.clone();
     let hotkey_promise = Promise::spawn_thread("Hotkey Checker", move || loop {
@@ -49,9 +48,34 @@ pub fn run_gui(app: App) {
         thread::sleep(Duration::from_millis(100));
 
     });
-
     *app.hotkey_promise.lock().unwrap() = Some(hotkey_promise);
-    let _ = eframe::run_native(&app.app_title_name.clone(), options, Box::new(|_cc| Ok(Box::new(app))));
+
+    // Load the icon image (ensure the path is correct)
+    let (icon_rgba, icon_width, icon_height) = {
+        let image = image::open("resources/app_icon.ico").expect("Failed to open icon path").to_rgba8();
+        let (width, height) = image.dimensions();
+        (image.into_raw(), width, height)
+    };
+    
+    // Create IconData
+    let icon_data = IconData {
+        rgba: icon_rgba,
+        width: icon_width,
+        height: icon_height,
+    };
+
+    let options = NativeOptions {
+        viewport: ViewportBuilder::default().with_icon(icon_data),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        &app.app_title_name.clone(),
+        options,
+        Box::new(|_cc| {
+            Ok(Box::new(app))
+        }),    )
+    .expect("Failed to run GUI");
 }
 
 impl EframeApp for App {

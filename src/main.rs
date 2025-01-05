@@ -1,4 +1,5 @@
 #![windows_subsystem = "windows"]
+
 mod gui;
 mod utils;
 mod window_manager;
@@ -8,20 +9,14 @@ use log::info;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
-use std::io::Write;
+use std::io::Write; // Fix for write_all error
 use std::sync::{Arc, Mutex};
+use windows::core::PCWSTR;
+use windows::Win32::Foundation::HWND;
+use windows::Win32::UI::WindowsAndMessaging::{
+    LoadImageW, SetClassLongPtrW, GCLP_HICON, IMAGE_ICON, LR_DEFAULTSIZE,
+};
 
-/// The entry point of the Multi Manager application.
-///
-/// - Initializes logging using `log4rs`.
-/// - Configures the environment for debugging (e.g., enabling backtraces).
-/// - Initializes the application state and launches the GUI.
-///
-/// # Panics
-/// - Panics if the `log4rs` configuration file (`log4rs.yaml`) cannot be loaded.
-///
-/// # Environment Variables
-/// - Sets `RUST_BACKTRACE` to `1` for enabling detailed error stack traces.
 fn main() {
     // Ensure logging is initialized
     ensure_logging_initialized();
@@ -41,18 +36,11 @@ fn main() {
         registered_hotkeys: Arc::new(Mutex::new(HashMap::new())), // Initialize the map
     };
 
-    // Launch GUI
+    // Launch GUI and set the taskbar icon after creating the window
     gui::run_gui(app);
 }
 
 /// Ensures a valid log4rs.yaml file exists and initializes logging.
-///
-/// - If the `log4rs.yaml` file is missing or invalid, it creates a default configuration file.
-/// - Attempts to initialize logging with the configuration file.
-/// - Exits the program if initialization fails.
-///
-/// # Panics
-/// Panics only if the program fails to create or reinitialize logging after retries.
 fn ensure_logging_initialized() {
     // Attempt to initialize logging configuration
     if let Err(err) = log4rs::init_file("log4rs.yaml", Default::default()) {
@@ -88,6 +76,30 @@ root:
                 e
             );
             std::process::exit(1); // Exit if retry fails
+        }
+    }
+}
+
+/// Sets the taskbar icon for the application.
+pub fn set_taskbar_icon(hwnd: HWND, icon_path: &str) {
+    unsafe {
+        let wide_path: Vec<u16> = icon_path.encode_utf16().chain(std::iter::once(0)).collect();
+        let icon = LoadImageW(
+            None,
+            PCWSTR(wide_path.as_ptr()),
+            IMAGE_ICON,
+            0,
+            0,
+            LR_DEFAULTSIZE,
+        )
+        .unwrap_or(windows::Win32::Foundation::HANDLE(std::ptr::null_mut())); // Fix: Use `windows::Win32::Foundation::HANDLE`.
+
+        if !icon.0.is_null() {
+            // Fix: Access `.0` for pointer check
+            SetClassLongPtrW(hwnd, GCLP_HICON, icon.0 as isize);
+            info!("Taskbar icon set successfully.");
+        } else {
+            eprintln!("Failed to load icon: {}", icon_path);
         }
     }
 }
