@@ -11,11 +11,6 @@ use std::env;
 use std::fs::File;
 use std::io::Write; // Fix for write_all error
 use std::sync::{Arc, Mutex};
-use windows::core::PCWSTR;
-use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{
-    LoadImageW, SetClassLongPtrW, GCLP_HICON, IMAGE_ICON, LR_DEFAULTSIZE,
-};
 
 fn main() {
     // Ensure logging is initialized
@@ -76,30 +71,6 @@ root:
                 e
             );
             std::process::exit(1); // Exit if retry fails
-        }
-    }
-}
-
-/// Sets the taskbar icon for the application.
-pub fn set_taskbar_icon(hwnd: HWND, icon_path: &str) {
-    unsafe {
-        let wide_path: Vec<u16> = icon_path.encode_utf16().chain(std::iter::once(0)).collect();
-        let icon = LoadImageW(
-            None,
-            PCWSTR(wide_path.as_ptr()),
-            IMAGE_ICON,
-            0,
-            0,
-            LR_DEFAULTSIZE,
-        )
-        .unwrap_or(windows::Win32::Foundation::HANDLE(std::ptr::null_mut())); // Fix: Use `windows::Win32::Foundation::HANDLE`.
-
-        if !icon.0.is_null() {
-            // Fix: Access `.0` for pointer check
-            SetClassLongPtrW(hwnd, GCLP_HICON, icon.0 as isize);
-            info!("Taskbar icon set successfully.");
-        } else {
-            eprintln!("Failed to load icon: {}", icon_path);
         }
     }
 }
