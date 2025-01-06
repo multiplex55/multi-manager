@@ -13,7 +13,6 @@ use std::time::{Duration, Instant};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::IsWindow;
 use eframe::NativeOptions;
-use crate::gui::egui::IconData;
 
 #[derive(Clone)]
 pub struct App {
@@ -50,22 +49,23 @@ pub fn run_gui(app: App) {
     });
     *app.hotkey_promise.lock().unwrap() = Some(hotkey_promise);
 
-    // Load the icon image (ensure the path is correct)
-    let (icon_rgba, icon_width, icon_height) = {
-        let image = image::open("resources/app_icon.ico").expect("Failed to open icon path").to_rgba8();
-        let (width, height) = image.dimensions();
-        (image.into_raw(), width, height)
-    };
-    
-    // Create IconData
-    let icon_data = IconData {
-        rgba: icon_rgba,
-        width: icon_width,
-        height: icon_height,
-    };
+    // Load embedded icon
+    let icon_data = include_bytes!("../resources/app_icon.ico");
 
+    // Decode the icon
+    let image = image::load_from_memory(icon_data)
+        .expect("Failed to load embedded icon")
+        .to_rgba8();
+    let (width, height) = image.dimensions();
+    let icon_rgba = image.into_raw();
+
+    // Use the icon in the application options
     let options = NativeOptions {
-        viewport: ViewportBuilder::default().with_icon(icon_data),
+        viewport: ViewportBuilder::default().with_icon(egui::IconData {
+            rgba: icon_rgba,
+            width,
+            height,
+        }),
         ..Default::default()
     };
 

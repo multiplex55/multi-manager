@@ -26,3 +26,4 @@ Cargo.lock
 workspaces.json
 multi_manager.log
 /.vscode
+build_debug.log
