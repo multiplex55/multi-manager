@@ -127,298 +127,302 @@ impl EframeApp for App {
                 ui.label("No hotkey detected yet.");
             }
             ui.separator();
-            let mut workspaces = self.workspaces.lock().unwrap();
-            for (i, workspace) in workspaces.iter_mut().enumerate() {
-                let header_id = egui::Id::new(format!("workspace_{}_header", i));
-                let mut is_renaming = ui
-                    .memory_mut(|mem| mem.data.get_temp::<bool>(header_id).unwrap_or(false));
 
-                let mut new_name = ui.memory_mut(|mem| {
-                    mem.data
-                        .get_temp::<String>(header_id.with("wrkspce_name"))
-                        .unwrap_or_else(|| workspace.name.clone())
-                });
-
-                // Check if the workspace is valid
-                let is_workspace_valid = {
-                    let hotkey_valid = workspace
-                        .hotkey
-                        .as_ref()
-                        .map_or(false, |hotkey| is_valid_key_combo(hotkey));
-
-                    let any_valid_window = workspace.windows.iter().any(|window| {
-                        unsafe { IsWindow(HWND(window.id as *mut std::ffi::c_void)).as_bool() }
-                    });
-
-                    hotkey_valid && any_valid_window
-                };
-
-                workspace.valid = is_workspace_valid;
-
-                // Set header text color based on validity
-                let header_text = if workspace.disabled{
-                    egui::RichText::new(&workspace.name).color(egui::Color32::ORANGE)
-                }
-                else if is_workspace_valid {
-                    egui::RichText::new(&workspace.name).color(egui::Color32::GREEN)
-                } else {
-                    egui::RichText::new(&workspace.name).color(egui::Color32::RED)
-                };
-
-                ui.horizontal(|ui| {
-
-                let header_response = egui::CollapsingHeader::new(header_text)
-                    .id_salt(i)
-                    .default_open(true)
-                    .show(ui, |ui| {
-                        use egui::{self, Color32};
-                        use log::{info, warn};
-
-                        ui.horizontal(|ui| {
-                            ui.label("Hotkey:");
-
-                            // Retrieve or initialize the temporary hotkey
-                            let workspace_id = i; // Unique ID for the workspace
-                            let id = egui::Id::new(workspace_id); // Convert workspace index to egui Id
-                            let mut temp_hotkey = ui.memory_mut(|mem| {
-                                mem.data.get_temp::<String>(id).unwrap_or_else(|| {
-                                    workspace
-                                        .hotkey
-                                        .clone()
-                                        .unwrap_or_else(|| "None".to_string())
-                                    // info!(
-                                    //     "Initializing temp_hotkey for workspace '{}': {}",
-                                    //     workspace.name, hotkey
-                                    // );
-                                })
-                            });
-
-                            // Editable text field for the hotkey
-                            let response = ui.text_edit_singleline(&mut temp_hotkey);
-
-                            if response.changed() {
-                                // Save temporary changes back to memory
-                                ui.memory_mut(|mem| {
-                                    mem.data.insert_temp::<String>(id, temp_hotkey.clone())
-                                });
-                                info!(
-                                    "Text changed for workspace '{}', new temp_hotkey: {}",
-                                    workspace.name, temp_hotkey
-                                );
-
-                                // Reset validation result on text change
-                                ui.memory_mut(|mem| {
-                                    mem.data.insert_temp::<Option<bool>>(id,None)
-                                });
-                            }
-
-                            let validation_result = match workspace.set_hotkey(&temp_hotkey) {
-                                Ok(_) => {
-                                    // info!(
-                                    //     "Validation succeeded for workspace '{}': {}",
-                                    //     workspace.name, temp_hotkey
-                                    // );
-                                    Some(true)
-                                }
-                                Err(err) => {
-                                    warn!(
-                                        "Validation failed for workspace '{}': {}",
-                                        workspace.name, err
-                                    );
-                                    Some(false)
-                                }
-                            };
-
-                            // Display validation result indicator
-                            match validation_result {
-                                Some(true) => ui.colored_label(Color32::GREEN, "Valid"),
-                                Some(false) => ui.colored_label(Color32::RED, "Invalid"),
-                                None => ui.label("Awaiting validation..."),
-                            }
+            egui::ScrollArea::vertical()
+                .auto_shrink([false;2])
+                .show(ui, |ui| {
+                    let mut workspaces = self.workspaces.lock().unwrap();
+                    for (i, workspace) in workspaces.iter_mut().enumerate() {
+                        let header_id = egui::Id::new(format!("workspace_{}_header", i));
+                        let mut is_renaming = ui
+                            .memory_mut(|mem| mem.data.get_temp::<bool>(header_id).unwrap_or(false));
+        
+                        let mut new_name = ui.memory_mut(|mem| {
+                            mem.data
+                                .get_temp::<String>(header_id.with("wrkspce_name"))
+                                .unwrap_or_else(|| workspace.name.clone())
                         });
-
-                        let mut window_to_delete = None;
-                        for (j, window) in workspace.windows.iter_mut().enumerate() {
-                            let hwnd = HWND(window.id as *mut std::ffi::c_void); // Move HWND declaration outside the loop
-                            let exists = unsafe { IsWindow(hwnd).as_bool() };    // Check if the window exists
-                            window.valid = exists;
-                            ui.horizontal(|ui| {
-                                ui.label(&window.title);
-                        
-                                if ui.button("Delete").clicked() {
-                                    window_to_delete = Some(j);
-                                    info!("Deleting window '{}'", window.title);
-                                }
-
-                                // Add the colored indicator for HWND validity
-                                if exists {
-                                    ui.colored_label(egui::Color32::GREEN, format!("HWND: {:?}", window.id));
-                                } else {
-                                    ui.colored_label(egui::Color32::RED, format!("HWND: {:?}", window.id));
-                                }
+        
+                        // Check if the workspace is valid
+                        let is_workspace_valid = {
+                            let hotkey_valid = workspace
+                                .hotkey
+                                .as_ref()
+                                .map_or(false, |hotkey| is_valid_key_combo(hotkey));
+        
+                            let any_valid_window = workspace.windows.iter().any(|window| {
+                                unsafe { IsWindow(HWND(window.id as *mut std::ffi::c_void)).as_bool() }
                             });
-                        
-                            ui.horizontal(|ui| {
-                                ui.label("Home:");
-                                ui.add(egui::DragValue::new(&mut window.home.0).prefix("x: "));
-                                ui.add(egui::DragValue::new(&mut window.home.1).prefix("y: "));
-                                ui.add(egui::DragValue::new(&mut window.home.2).prefix("w: "));
-                                ui.add(egui::DragValue::new(&mut window.home.3).prefix("h: "));
-                        
-                                if ui.button("Capture Home").clicked() {
-                                    if let Ok((x, y, w, h)) = get_window_position(hwnd) {
-                                        window.home = (x, y, w, h);
-                                        info!(
-                                            "Captured window position for Home using window ID {:?}: {:?}",
-                                            window.id, window.home
-                                        );
-                                    } else {
-                                        warn!(
-                                            "Failed to capture window position for Home using window ID {:?}",
-                                            window.id
-                                        );
-                                    }
-                                }
-                        
-                                if ui.button("Move to Home").clicked() {
-                                    if let Err(e) = move_window(hwnd, window.home.0, window.home.1, window.home.2, window.home.3) {
-                                        warn!("Error moving window '{}': {}", window.title, e);
-                                    }
-                                }
-                            });
-                        
-                            ui.horizontal(|ui| {
-                                ui.label("Target:");
-                                ui.add(egui::DragValue::new(&mut window.target.0).prefix("x: "));
-                                ui.add(egui::DragValue::new(&mut window.target.1).prefix("y: "));
-                                ui.add(egui::DragValue::new(&mut window.target.2).prefix("w: "));
-                                ui.add(egui::DragValue::new(&mut window.target.3).prefix("h: "));
-                        
-                                if ui.button("Capture Target").clicked() {
-                                    if let Ok((x, y, w, h)) = get_window_position(hwnd) {
-                                        window.target = (x, y, w, h);
-                                        info!(
-                                            "Captured window position for Target using window ID {:?}: {:?}",
-                                            window.id, window.target
-                                        );
-                                    } else {
-                                        warn!(
-                                            "Failed to capture window position for Target using window ID {:?}",
-                                            window.id
-                                        );
-                                    }
-                                }
-                        
-                                if ui.button("Move to Target").clicked() {
-                                    if let Err(e) = move_window(hwnd, window.target.0, window.target.1, window.target.2, window.target.3) {
-                                        warn!("Error moving window '{}': {}", window.title, e);
-                                    }
-                                }
-                            });
+        
+                            hotkey_valid && any_valid_window
+                        };
+        
+                        workspace.valid = is_workspace_valid;
+        
+                        // Set header text color based on validity
+                        let header_text = if workspace.disabled{
+                            egui::RichText::new(&workspace.name).color(egui::Color32::ORANGE)
                         }
-
-                        if let Some(index) = window_to_delete {
-                            workspace.windows.remove(index);
-                        }
-
-                        if ui.button("Capture Active Window").clicked() {
-                            
-                            if let Some("Enter") = listen_for_keys_with_dialog() {
-                                if let Some((hwnd, title)) = get_active_window() {
-                                    if !title.contains(&self.app_title_name){
-                                        workspace.windows.push(Window {
-                                            id: hwnd.0 as usize,
-                                            title: title.clone(),
-                                            home: (0, 0, 800, 600),
-                                            target: (0, 0, 800, 600),
-                                            valid: false
+                        else if is_workspace_valid {
+                            egui::RichText::new(&workspace.name).color(egui::Color32::GREEN)
+                        } else {
+                            egui::RichText::new(&workspace.name).color(egui::Color32::RED)
+                        };
+        
+                        ui.horizontal(|ui| {
+        
+                        let header_response = egui::CollapsingHeader::new(header_text)
+                            .id_salt(i)
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                use egui::{self, Color32};
+                                use log::{info, warn};
+        
+                                ui.horizontal(|ui| {
+                                    ui.label("Hotkey:");
+        
+                                    // Retrieve or initialize the temporary hotkey
+                                    let workspace_id = i; // Unique ID for the workspace
+                                    let id = egui::Id::new(workspace_id); // Convert workspace index to egui Id
+                                    let mut temp_hotkey = ui.memory_mut(|mem| {
+                                        mem.data.get_temp::<String>(id).unwrap_or_else(|| {
+                                            workspace
+                                                .hotkey
+                                                .clone()
+                                                .unwrap_or_else(|| "None".to_string())
+                                            // info!(
+                                            //     "Initializing temp_hotkey for workspace '{}': {}",
+                                            //     workspace.name, hotkey
+                                            // );
+                                        })
+                                    });
+        
+                                    // Editable text field for the hotkey
+                                    let response = ui.text_edit_singleline(&mut temp_hotkey);
+        
+                                    if response.changed() {
+                                        // Save temporary changes back to memory
+                                        ui.memory_mut(|mem| {
+                                            mem.data.insert_temp::<String>(id, temp_hotkey.clone())
+                                        });
+                                        info!(
+                                            "Text changed for workspace '{}', new temp_hotkey: {}",
+                                            workspace.name, temp_hotkey
+                                        );
+        
+                                        // Reset validation result on text change
+                                        ui.memory_mut(|mem| {
+                                            mem.data.insert_temp::<Option<bool>>(id,None)
                                         });
                                     }
-                                    else{
-                                        show_message_box("Can not capture window that contains app name for safety", "Capture Info");
-                                        info!("Capture was potentially the app name");
-                                    }
-                                    info!("Captured active window: '{}'.", title);
-                                }
-                            } else {
-                                warn!("Capture canceled.");
-                            }
-                        }
-
-                        ui.horizontal(|ui| {
-                            // Checkbox for "Disable"
-                            ui.checkbox(&mut workspace.disabled, "Disable Workspace");
-                    
-                            if workspace.disabled{
-                                unregister_hotkey(self,i as i32); // Unregister hotkey if disabled
-                            } else if let Some(hotkey) = &workspace.hotkey {
-                                register_hotkey(self,i as i32, hotkey); // Re-register hotkey if re-enabled
-                            }
-
-                            if ui.button("Delete Workspace").clicked() {
-                                // Temporary comment: Add confirmation dialog before deleting the workspace
-                                let confirmation_message = format!(
-                                    "Are you sure you want to delete the workspace \n'{}'?\n\nThis action cannot be undone.",
-                                    workspace.name
-                                );
-                                if show_confirmation_box(&confirmation_message, "Confirm Deletion") {
-                                    workspace_to_delete = Some(i);
-                                    info!("Deleting workspace '{}'.", workspace.name);
-                                }
-                            }
-                        });
-
-                        ui.separator();
         
-                    });
-                    if header_response.header_response.hovered() && ui.input(|i| i.pointer.secondary_clicked()) {
-                        // Right-click detected on header
-                        is_renaming = true;
-                        ui.memory_mut(|mem| mem.data.insert_temp(header_id, is_renaming));
-                    }
-    
-                    // Show a popup window for renaming the workspace
-                    if is_renaming {
-                        egui::Window::new("Rename Workspace")
-                            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0]) // Center the popup
-                            .collapsible(false)
-                            .resizable(false)
-                            .show(ctx, |ui| {
-                                ui.label("Enter a new name for the workspace:");
-                                let response = ui.text_edit_singleline(&mut new_name);
-    
-                                if response.changed() {
-                                    ui.memory_mut(|mem| {
-                                        mem.data.insert_temp(header_id.with("wrkspce_name"), new_name.clone());
-                                    });
-                                }
-    
-                                ui.horizontal(|ui| {
-                                    if ui.button("Ok").clicked() || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
-                                        // Save the new name and close the popup
-                                        workspace.name = new_name.clone();
-                                        is_renaming = false;
-                                        ui.memory_mut(|mem| mem.data.insert_temp(header_id, is_renaming));
-                                    }
-    
-                                    if ui.button("Cancel").clicked() {
-                                        // Cancel renaming and close the popup
-                                        is_renaming = false;
-                                        ui.memory_mut(|mem| mem.data.insert_temp(header_id, is_renaming));
+                                    let validation_result = match workspace.set_hotkey(&temp_hotkey) {
+                                        Ok(_) => {
+                                            // info!(
+                                            //     "Validation succeeded for workspace '{}': {}",
+                                            //     workspace.name, temp_hotkey
+                                            // );
+                                            Some(true)
+                                        }
+                                        Err(err) => {
+                                            warn!(
+                                                "Validation failed for workspace '{}': {}",
+                                                workspace.name, err
+                                            );
+                                            Some(false)
+                                        }
+                                    };
+        
+                                    // Display validation result indicator
+                                    match validation_result {
+                                        Some(true) => ui.colored_label(Color32::GREEN, "Valid"),
+                                        Some(false) => ui.colored_label(Color32::RED, "Invalid"),
+                                        None => ui.label("Awaiting validation..."),
                                     }
                                 });
+        
+                                let mut window_to_delete = None;
+                                for (j, window) in workspace.windows.iter_mut().enumerate() {
+                                    let hwnd = HWND(window.id as *mut std::ffi::c_void); // Move HWND declaration outside the loop
+                                    let exists = unsafe { IsWindow(hwnd).as_bool() };    // Check if the window exists
+                                    window.valid = exists;
+                                    ui.horizontal(|ui| {
+                                        ui.label(&window.title);
+                                
+                                        if ui.button("Delete").clicked() {
+                                            window_to_delete = Some(j);
+                                            info!("Deleting window '{}'", window.title);
+                                        }
+        
+                                        // Add the colored indicator for HWND validity
+                                        if exists {
+                                            ui.colored_label(egui::Color32::GREEN, format!("HWND: {:?}", window.id));
+                                        } else {
+                                            ui.colored_label(egui::Color32::RED, format!("HWND: {:?}", window.id));
+                                        }
+                                    });
+                                
+                                    ui.horizontal(|ui| {
+                                        ui.label("Home:");
+                                        ui.add(egui::DragValue::new(&mut window.home.0).prefix("x: "));
+                                        ui.add(egui::DragValue::new(&mut window.home.1).prefix("y: "));
+                                        ui.add(egui::DragValue::new(&mut window.home.2).prefix("w: "));
+                                        ui.add(egui::DragValue::new(&mut window.home.3).prefix("h: "));
+                                
+                                        if ui.button("Capture Home").clicked() {
+                                            if let Ok((x, y, w, h)) = get_window_position(hwnd) {
+                                                window.home = (x, y, w, h);
+                                                info!(
+                                                    "Captured window position for Home using window ID {:?}: {:?}",
+                                                    window.id, window.home
+                                                );
+                                            } else {
+                                                warn!(
+                                                    "Failed to capture window position for Home using window ID {:?}",
+                                                    window.id
+                                                );
+                                            }
+                                        }
+                                
+                                        if ui.button("Move to Home").clicked() {
+                                            if let Err(e) = move_window(hwnd, window.home.0, window.home.1, window.home.2, window.home.3) {
+                                                warn!("Error moving window '{}': {}", window.title, e);
+                                            }
+                                        }
+                                    });
+                                
+                                    ui.horizontal(|ui| {
+                                        ui.label("Target:");
+                                        ui.add(egui::DragValue::new(&mut window.target.0).prefix("x: "));
+                                        ui.add(egui::DragValue::new(&mut window.target.1).prefix("y: "));
+                                        ui.add(egui::DragValue::new(&mut window.target.2).prefix("w: "));
+                                        ui.add(egui::DragValue::new(&mut window.target.3).prefix("h: "));
+                                
+                                        if ui.button("Capture Target").clicked() {
+                                            if let Ok((x, y, w, h)) = get_window_position(hwnd) {
+                                                window.target = (x, y, w, h);
+                                                info!(
+                                                    "Captured window position for Target using window ID {:?}: {:?}",
+                                                    window.id, window.target
+                                                );
+                                            } else {
+                                                warn!(
+                                                    "Failed to capture window position for Target using window ID {:?}",
+                                                    window.id
+                                                );
+                                            }
+                                        }
+                                
+                                        if ui.button("Move to Target").clicked() {
+                                            if let Err(e) = move_window(hwnd, window.target.0, window.target.1, window.target.2, window.target.3) {
+                                                warn!("Error moving window '{}': {}", window.title, e);
+                                            }
+                                        }
+                                    });
+                                }
+        
+                                if let Some(index) = window_to_delete {
+                                    workspace.windows.remove(index);
+                                }
+        
+                                if ui.button("Capture Active Window").clicked() {
+                                    
+                                    if let Some("Enter") = listen_for_keys_with_dialog() {
+                                        if let Some((hwnd, title)) = get_active_window() {
+                                            if !title.contains(&self.app_title_name){
+                                                workspace.windows.push(Window {
+                                                    id: hwnd.0 as usize,
+                                                    title: title.clone(),
+                                                    home: (0, 0, 800, 600),
+                                                    target: (0, 0, 800, 600),
+                                                    valid: false
+                                                });
+                                            }
+                                            else{
+                                                show_message_box("Can not capture window that contains app name for safety", "Capture Info");
+                                                info!("Capture was potentially the app name");
+                                            }
+                                            info!("Captured active window: '{}'.", title);
+                                        }
+                                    } else {
+                                        warn!("Capture canceled.");
+                                    }
+                                }
+        
+                                ui.horizontal(|ui| {
+                                    // Checkbox for "Disable"
+                                    ui.checkbox(&mut workspace.disabled, "Disable Workspace");
+                            
+                                    if workspace.disabled{
+                                        unregister_hotkey(self,i as i32); // Unregister hotkey if disabled
+                                    } else if let Some(hotkey) = &workspace.hotkey {
+                                        register_hotkey(self,i as i32, hotkey); // Re-register hotkey if re-enabled
+                                    }
+        
+                                    if ui.button("Delete Workspace").clicked() {
+                                        // Temporary comment: Add confirmation dialog before deleting the workspace
+                                        let confirmation_message = format!(
+                                            "Are you sure you want to delete the workspace \n'{}'?\n\nThis action cannot be undone.",
+                                            workspace.name
+                                        );
+                                        if show_confirmation_box(&confirmation_message, "Confirm Deletion") {
+                                            workspace_to_delete = Some(i);
+                                            info!("Deleting workspace '{}'.", workspace.name);
+                                        }
+                                    }
+                                });
+        
+                                ui.separator();
+                
                             });
-                    }
-                });
-            }//Per Workspace
-
-            if let Some(new_workspace) = new_workspace_to_add {
-                workspaces.push(new_workspace);
-            }
-
-            if let Some(index) = workspace_to_delete {
-                workspaces.remove(index);
-            }
+                            if header_response.header_response.hovered() && ui.input(|i| i.pointer.secondary_clicked()) {
+                                // Right-click detected on header
+                                is_renaming = true;
+                                ui.memory_mut(|mem| mem.data.insert_temp(header_id, is_renaming));
+                            }
+            
+                            // Show a popup window for renaming the workspace
+                            if is_renaming {
+                                egui::Window::new("Rename Workspace")
+                                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0]) // Center the popup
+                                    .collapsible(false)
+                                    .resizable(false)
+                                    .show(ctx, |ui| {
+                                        ui.label("Enter a new name for the workspace:");
+                                        let response = ui.text_edit_singleline(&mut new_name);
+            
+                                        if response.changed() {
+                                            ui.memory_mut(|mem| {
+                                                mem.data.insert_temp(header_id.with("wrkspce_name"), new_name.clone());
+                                            });
+                                        }
+            
+                                        ui.horizontal(|ui| {
+                                            if ui.button("Ok").clicked() || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
+                                                // Save the new name and close the popup
+                                                workspace.name = new_name.clone();
+                                                is_renaming = false;
+                                                ui.memory_mut(|mem| mem.data.insert_temp(header_id, is_renaming));
+                                            }
+            
+                                            if ui.button("Cancel").clicked() {
+                                                // Cancel renaming and close the popup
+                                                is_renaming = false;
+                                                ui.memory_mut(|mem| mem.data.insert_temp(header_id, is_renaming));
+                                            }
+                                        });
+                                    });
+                            }
+                        });
+                    }//Per Workspace
+                if let Some(new_workspace) = new_workspace_to_add {
+                    workspaces.push(new_workspace);
+                }
+    
+                if let Some(index) = workspace_to_delete {
+                    workspaces.remove(index);
+                }
+            }); //ScrollArea
         });
 
         if save_workspaces_flag {
