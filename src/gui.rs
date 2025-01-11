@@ -357,13 +357,12 @@ impl EframeApp for App {
                                     ui.checkbox(&mut workspace.disabled, "Disable Workspace");
                             
                                     if workspace.disabled{
-                                        unregister_hotkey(self,i as i32); // Unregister hotkey if disabled
+                                        unregister_hotkey(self,i as i32); 
                                     } else if let Some(hotkey) = &workspace.hotkey {
-                                        register_hotkey(self,i as i32, hotkey); // Re-register hotkey if re-enabled
+                                        register_hotkey(self,i as i32, hotkey); 
                                     }
         
                                     if ui.button("Delete Workspace").clicked() {
-                                        // Temporary comment: Add confirmation dialog before deleting the workspace
                                         let confirmation_message = format!(
                                             "Are you sure you want to delete the workspace \n'{}'?\n\nThis action cannot be undone.",
                                             workspace.name
@@ -376,19 +375,12 @@ impl EframeApp for App {
                                 });
 
                                 ui.horizontal(|ui| {
-                                    // TEMP COMMENT: Move Up/Down logic
-                                    if i > 0 {
-                                        if ui.button("↑ Move Up").clicked() {
-                                            // TEMP COMMENT: Store the index instead of swapping immediately
+                                    if i > 0 && ui.button("↑ Move Up").clicked() {
                                             move_up_index = Some(i);
                                         }
-                                    }
-                                    if i < workspaces_len - 1 {
-                                        if ui.button("↓ Move Down").clicked() {
-                                            // TEMP COMMENT: Store the index
+                                    if i < workspaces_len - 1 && ui.button("↓ Move Down").clicked() {
                                             move_down_index = Some(i);
                                         }
-                                    }
                                 });
                                 ui.separator();
                 
