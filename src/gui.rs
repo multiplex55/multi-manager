@@ -1,8 +1,9 @@
+use crate::utils::*;
 use crate::window_manager::*;
 use crate::workspace::*;
-use crate::utils::*;
 use eframe::egui;
 use eframe::egui::ViewportBuilder;
+use eframe::NativeOptions;
 use eframe::{self, App as EframeApp};
 use log::{info, warn};
 use poll_promise::Promise;
@@ -12,7 +13,6 @@ use std::thread;
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::IsWindow;
-use eframe::NativeOptions;
 
 #[derive(Clone)]
 pub struct App {
@@ -45,7 +45,6 @@ pub fn run_gui(app: App) {
     let hotkey_promise = Promise::spawn_thread("Hotkey Checker", move || loop {
         check_hotkeys(&app_for_promise);
         thread::sleep(Duration::from_millis(100));
-
     });
     *app.hotkey_promise.lock().unwrap() = Some(hotkey_promise);
 
@@ -72,9 +71,8 @@ pub fn run_gui(app: App) {
     eframe::run_native(
         &app.app_title_name.clone(),
         options,
-        Box::new(|_cc| {
-            Ok(Box::new(app))
-        }),    )
+        Box::new(|_cc| Ok(Box::new(app))),
+    )
     .expect("Failed to run GUI");
 }
 
@@ -90,7 +88,6 @@ impl EframeApp for App {
     /// * `ctx` - The egui context for rendering the GUI.
     /// * `_frame` - The frame provided by eframe for managing the application window.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-
         let mut workspace_to_delete = None;
         let mut save_workspaces_flag = false;
         let mut new_workspace_to_add: Option<Workspace> = None;
@@ -132,6 +129,12 @@ impl EframeApp for App {
                 .auto_shrink([false;2])
                 .show(ui, |ui| {
                     let mut workspaces = self.workspaces.lock().unwrap();
+
+                    let workspaces_len = workspaces.len();
+
+                    let mut move_up_index: Option<usize> = None;
+                    let mut move_down_index: Option<usize> = None;
+
                     for (i, workspace) in workspaces.iter_mut().enumerate() {
                         let header_id = egui::Id::new(format!("workspace_{}_header", i));
                         let mut is_renaming = ui
@@ -371,10 +374,26 @@ impl EframeApp for App {
                                         }
                                     }
                                 });
-        
+
+                                ui.horizontal(|ui| {
+                                    // TEMP COMMENT: Move Up/Down logic
+                                    if i > 0 {
+                                        if ui.button("↑ Move Up").clicked() {
+                                            // TEMP COMMENT: Store the index instead of swapping immediately
+                                            move_up_index = Some(i);
+                                        }
+                                    }
+                                    if i < workspaces_len - 1 {
+                                        if ui.button("↓ Move Down").clicked() {
+                                            // TEMP COMMENT: Store the index
+                                            move_down_index = Some(i);
+                                        }
+                                    }
+                                });
                                 ui.separator();
                 
                             });
+
                             if header_response.header_response.hovered() && ui.input(|i| i.pointer.secondary_clicked()) {
                                 // Right-click detected on header
                                 is_renaming = true;
@@ -415,6 +434,17 @@ impl EframeApp for App {
                             }
                         });
                     }//Per Workspace
+
+                    if let Some(i) = move_up_index {
+                        if i > 0 {
+                            workspaces.swap(i, i - 1);
+                        }
+                    }
+                    if let Some(i) = move_down_index {
+                        if i < workspaces.len() - 1 {
+                            workspaces.swap(i, i + 1);
+                        }
+                    }
                 if let Some(new_workspace) = new_workspace_to_add {
                     workspaces.push(new_workspace);
                 }
@@ -470,7 +500,6 @@ fn check_hotkeys(app: &App) {
     let workspaces = app.workspaces.lock().unwrap();
 
     for (i, workspace) in workspaces.iter().enumerate() {
-
         if workspace.disabled {
             continue;
         }
