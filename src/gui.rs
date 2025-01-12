@@ -259,23 +259,66 @@ impl EframeApp for App {
         
                                         // Add the colored indicator for HWND validity
                                         if exists {
-                                            ui.colored_label(egui::Color32::GREEN, format!("HWND: {:?}", window.id));
-                                        } else {
-                                            ui.colored_label(egui::Color32::RED, format!("HWND: {:?}", window.id));
-                                            if ui.button("Recapture").clicked() {
-                                                if let Some("Enter") = listen_for_keys_with_dialog() {
-                                                    if let Some((new_hwnd, new_title)) = get_active_window() {
-                                                        // Update the invalid window with the new HWND but retain home/target
-                                                        window.id = new_hwnd.0 as usize;
-                                                        window.title = new_title;
-                                                        info!(
-                                                            "Recaptured window '{}', new HWND: {:?}",
-                                                            window.title, new_hwnd
-                                                        );
-                                                    } else {
-                                                        warn!("Recapture canceled or no active window detected.");
+                                                    // Create a unique ID for the popup menu
+                                                    let popup_id = egui::Id::new(format!("hwnd_context_menu_{}", j));
+
+                                                    // Handle right-click to toggle popup visibility
+                                                    let label_response = ui.colored_label(egui::Color32::GREEN, format!("HWND: {:?}", window.id));
+
+                                                    // Handle right-click to toggle popup visibility
+                                                    if label_response.hovered() && ui.input(|i| i.pointer.secondary_clicked()) {
+                                                        info!("Right-click detected on HWND label.");
+                                                        ui.memory_mut(|mem| mem.toggle_popup(popup_id));
                                                     }
-                                                }
+                                                    
+                                                    // Render the popup menu if it's open
+                                                    if ui.memory(|mem| mem.is_popup_open(popup_id)) {
+                                                        egui::Window::new(format!("Force Recapture?  {}", j))
+                                                            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0]) // Position the menu centrally
+                                                            .collapsible(false)
+                                                            .resizable(false)
+                                                            .show(ctx, |ui| {
+                                                                ui.label("Options:");
+                                                    
+                                                                // Add the "Force Recapture" option
+                                                                if ui.button("Force Recapture").clicked() {
+                                                                    info!("Force Recapture triggered for HWND: {:?}", window.id);
+                                                                    if let Some("Enter") = listen_for_keys_with_dialog() {
+                                                                        if let Some((new_hwnd, new_title)) = get_active_window() {
+                                                                            // Update the HWND and title
+                                                                            window.id = new_hwnd.0 as usize;
+                                                                            window.title = new_title;
+                                                                            info!(
+                                                                                "Force Recaptured window '{}', new HWND: {:?}",
+                                                                                window.title, new_hwnd
+                                                                            );
+                                                                        } else {
+                                                                            warn!("Force Recapture canceled or no active window detected.");
+                                                                        }
+                                                                    }
+                                                    
+                                                                    // Close the popup after the action
+                                                                    ui.memory_mut(|mem| mem.close_popup());
+                                                                }
+                                                            });
+                                                    }
+                                                    
+                                                } else {
+                                                        ui.colored_label(egui::Color32::RED, format!("HWND: {:?}", window.id));
+                                                        if ui.button("Recapture").clicked() {
+                                                            if let Some("Enter") = listen_for_keys_with_dialog() {
+                                                                if let Some((new_hwnd, new_title)) = get_active_window() {
+                                                                    // Update the invalid window with the new HWND but retain home/target
+                                                                    window.id = new_hwnd.0 as usize;
+                                                                    window.title = new_title;
+                                                                    info!(
+                                                                        "Recaptured window '{}', new HWND: {:?}",
+                                                                        window.title, new_hwnd
+                                                                    );
+                                                                } else {
+                                                                    warn!("Recapture canceled or no active window detected.");
+                                                                }
+                                                            }
                                             }
                                         }
                                     });
