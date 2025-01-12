@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{Read, Write};
 use windows::Win32::Foundation::HWND;
+use crate::window_manager::*;
+use windows::Win32::UI::WindowsAndMessaging::IsWindow;
 
 /// Represents a workspace, which groups multiple windows and allows toggling between specific positions.
 ///
@@ -98,17 +100,80 @@ impl Workspace {
                 // Display window title
                 ui.label(&window.title);
 
-                // Show HWND label with validity coloring
-                if window.valid {
-                    ui.colored_label(egui::Color32::GREEN, format!("HWND: {:?}", window.id));
-                } else {
-                    ui.colored_label(egui::Color32::RED, format!("HWND: {:?}", window.id));
-                }
-
                 // Add delete button
                 if ui.button("Delete").clicked() {
                     window_to_delete = Some(i);
                 }
+
+                let exists = unsafe { IsWindow(HWND(window.id as *mut std::ffi::c_void)).as_bool() }; 
+                // Add the colored indicator for HWND validity
+                if exists {
+                    // Define the label and capture its response
+                    let label_response = ui.colored_label(
+                        egui::Color32::GREEN,
+                        format!("HWND: {:?}", window.id),
+                    );
+                
+                    // Create a unique ID for the popup menu
+                    let popup_id = egui::Id::new(format!("hwnd_context_menu_workspace_{}_{}", i,window.id));
+
+                
+                    // Handle right-click to toggle popup visibility
+                    if label_response.hovered() && ui.input(|i| i.pointer.secondary_clicked()) && !ui.memory(|mem| mem.is_popup_open(popup_id)) {
+                        ui.memory_mut(|mem| mem.open_popup(popup_id));
+                        }
+                
+                    // Render the popup menu if it's open
+                    egui::popup::popup_below_widget(
+                        ui,
+                        popup_id,
+                        &label_response, // Pass the label_response here
+                        egui::PopupCloseBehavior::CloseOnClickOutside, // Auto-close on outside click
+                        |ui| {
+                            ui.label("Options:");
+                
+                            // Add the "Force Recapture" button
+                            if ui.button("Force Recapture").clicked() {
+                                info!("Force Recapture triggered for HWND: {:?}", window.id);
+                                if let Some("Enter") = listen_for_keys_with_dialog() {
+                                    if let Some((new_hwnd, new_title)) = get_active_window() {
+                                        // Update the HWND and title
+                                        window.id = new_hwnd.0 as usize;
+                                        window.title = new_title;
+                                        info!(
+                                            "Force Recaptured window '{}', new HWND: {:?}",
+                                            window.title, new_hwnd
+                                        );
+                                    } else {
+                                        warn!("Force Recapture canceled or no active window detected.");
+                                    }
+                                }
+                    
+                                // Explicitly close the popup after the action
+                                ui.memory_mut(|mem| mem.close_popup());
+                            }
+                        },
+                    );
+                    
+        } else {
+            ui.colored_label(egui::Color32::RED, format!("HWND: {:?}", window.id));
+            if ui.button("Recapture").clicked() {
+                if let Some("Enter") = listen_for_keys_with_dialog() {
+                    if let Some((new_hwnd, new_title)) = get_active_window() {
+                        // Update the invalid window with the new HWND but retain home/target
+                        window.id = new_hwnd.0 as usize;
+                        window.title = new_title;
+                        info!(
+                            "Recaptured window '{}', new HWND: {:?}",
+                            window.title, new_hwnd
+                            );
+                        } else {
+                            warn!("Recapture canceled or no active window detected.");
+                        }
+                    }
+                }
+            }
+                
             });
 
             // Render controls for individual window
