@@ -150,8 +150,7 @@ impl EframeApp for App {
                         let is_workspace_valid = {
                             let hotkey_valid = workspace
                                 .hotkey
-                                .as_ref()
-                                .map_or(false, |hotkey| is_valid_key_combo(hotkey));
+                                .as_ref().is_some_and(|hotkey| is_valid_key_combo(hotkey));
         
                             let any_valid_window = workspace.windows.iter().any(|window| {
                                 unsafe { IsWindow(HWND(window.id as *mut std::ffi::c_void)).as_bool() }
@@ -185,8 +184,8 @@ impl EframeApp for App {
                                     ui.label("Hotkey:");
         
                                     // Retrieve or initialize the temporary hotkey
-                                    let workspace_id = i; // Unique ID for the workspace
-                                    let id = egui::Id::new(workspace_id); // Convert workspace index to egui Id
+                                    let workspace_id = i;
+                                    let id = egui::Id::new(workspace_id); 
                                     let mut temp_hotkey = ui.memory_mut(|mem| {
                                         mem.data.get_temp::<String>(id).unwrap_or_else(|| {
                                             workspace
@@ -246,8 +245,8 @@ impl EframeApp for App {
         
                                 let mut window_to_delete = None;
                                 for (j, window) in workspace.windows.iter_mut().enumerate() {
-                                    let hwnd = HWND(window.id as *mut std::ffi::c_void); // Move HWND declaration outside the loop
-                                    let exists = unsafe { IsWindow(hwnd).as_bool() };    // Check if the window exists
+                                    let hwnd = HWND(window.id as *mut std::ffi::c_void); 
+                                    let exists = unsafe { IsWindow(hwnd).as_bool() }; 
                                     window.valid = exists;
                                     ui.horizontal(|ui| {
                                         ui.label(&window.title);
@@ -268,7 +267,6 @@ impl EframeApp for App {
                                                     // Create a unique ID for the popup menu
                                                     let popup_id = egui::Id::new(format!("hwnd_context_menu_workspace_{}_{}", i, j));
 
-                                                
                                                     // Handle right-click to toggle popup visibility
                                                     if label_response.hovered() && ui.input(|i| i.pointer.secondary_clicked()) && !ui.memory(|mem| mem.is_popup_open(popup_id)) {
                                                         ui.memory_mut(|mem| mem.open_popup(popup_id));
@@ -278,8 +276,8 @@ impl EframeApp for App {
                                                     egui::popup::popup_below_widget(
                                                         ui,
                                                         popup_id,
-                                                        &label_response, // Pass the label_response here
-                                                        egui::PopupCloseBehavior::CloseOnClickOutside, // Auto-close on outside click
+                                                        &label_response, 
+                                                        egui::PopupCloseBehavior::CloseOnClickOutside,
                                                         |ui| {
                                                             ui.label("Options:");
                                                 
@@ -288,7 +286,7 @@ impl EframeApp for App {
                                                                 info!("Force Recapture triggered for HWND: {:?}", window.id);
                                                                 if let Some("Enter") = listen_for_keys_with_dialog() {
                                                                     if let Some((new_hwnd, new_title)) = get_active_window() {
-                                                                        // Update the HWND and title
+
                                                                         window.id = new_hwnd.0 as usize;
                                                                         window.title = new_title;
                                                                         info!(
@@ -299,8 +297,7 @@ impl EframeApp for App {
                                                                         warn!("Force Recapture canceled or no active window detected.");
                                                                     }
                                                                 }
-                                                    
-                                                                // Explicitly close the popup after the action
+                                                                
                                                                 ui.memory_mut(|mem| mem.close_popup());
                                                             }
                                                         },
@@ -436,10 +433,10 @@ impl EframeApp for App {
                                 });
 
                                 ui.horizontal(|ui| {
-                                    if i > 0 && ui.button("↑ Move Up").clicked() {
+                                    if i > 0 && ui.button("Move ⏶").clicked() {
                                             move_up_index = Some(i);
                                         }
-                                    if i < workspaces_len - 1 && ui.button("↓ Move Down").clicked() {
+                                    if i < workspaces_len - 1 && ui.button("Move ⏷").clicked() {
                                             move_down_index = Some(i);
                                         }
                                 });
