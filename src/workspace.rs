@@ -194,6 +194,52 @@ impl Workspace {
             }
         }
     }
+
+/// Validates the state of a workspace.
+///
+/// This function ensures that a workspace is in a valid state by checking:
+/// - If the assigned hotkey (if any) is in a valid format.
+/// - If the workspace contains at least one valid window (an HWND that corresponds to an existing window).
+///
+/// The `valid` field of the workspace is updated accordingly.
+///
+/// # Behavior
+/// - Checks the validity of the hotkey using the `is_valid_key_combo` function.
+/// - Verifies the existence of at least one valid window using the Win32 API `IsWindow`.
+/// - Updates the `valid` field of the `Workspace` struct to `true` if both checks pass.
+///
+/// # Example
+/// ```rust
+/// let mut workspace = Workspace {
+///     name: "Example".to_string(),
+///     hotkey: Some("Ctrl+Alt+H".to_string()),
+///     windows: vec![Window {
+///         id: 12345,
+///         title: "Example Window".to_string(),
+///         home: (0, 0, 800, 600),
+///         target: (100, 100, 800, 600),
+///         valid: true,
+///     }],
+///     disabled: false,
+///     valid: false,
+/// };
+/// workspace.validate_workspace();
+/// assert!(workspace.valid);
+/// ```
+///
+/// # Dependencies
+/// - Relies on `is_valid_key_combo` for hotkey validation.
+/// - Uses the Win32 API `IsWindow` to check window validity.
+///
+/// # Parameters
+/// - No parameters. Operates directly on the instance of the `Workspace`.
+///
+/// # Side Effects
+/// - Updates the `valid` field of the `Workspace` struct.
+///
+/// # Notes
+/// - This function should be called whenever the state of a workspace changes (e.g., hotkey or windows are modified).
+/// - The `disabled` state does not affect validation; it is treated independently.
     pub fn validate_workspace(&mut self){
         self.valid = {
             let hotkey_valid = self
@@ -208,8 +254,45 @@ impl Workspace {
         };
     }
 }
-
-/// Renders the controls for a specific window within the workspace.
+/// Renders the controls for managing a specific window within a workspace.
+///
+/// This function creates an interface for interacting with a window's position settings.
+/// It allows the user to view and modify the home and target positions of the window, as well as capture or move
+/// the window to these positions. Each control is laid out in a horizontal UI group, with labels, input fields,
+/// and buttons.
+///
+/// # Behavior
+/// - Provides UI elements for adjusting and capturing the window's home and target positions.
+/// - Allows moving the window to the home or target position using the `move_window` function.
+/// - Enables capturing the current window position using the `get_window_position` function.
+///
+/// # Example
+/// ```rust
+/// render_window_controls(ui, &mut window);
+/// ```
+///
+/// # Dependencies
+/// - Relies on the `get_window_position` function to capture the current position of the window.
+/// - Uses the `move_window` function to reposition the window.
+///
+/// # Parameters
+/// - `ui: &mut egui::Ui`: The UI context to render the controls.
+/// - `window: &mut Window`: The window instance for which controls are rendered.
+///
+/// # Side Effects
+/// - Directly modifies the `home` and `target` fields of the `Window` struct based on user interaction.
+/// - Calls Win32 API functions via `move_window` and `get_window_position` to interact with system windows.
+///
+/// # Error Conditions
+/// - If the `move_window` function fails to reposition the window, a warning is logged.
+///
+/// # Notes
+/// - Ensure the window's HWND is valid before attempting to move or capture its position.
+/// - The `home` and `target` fields represent `(x, y, width, height)` tuples defining the window's position.
+///
+/// # Example UI Interaction
+/// - Drag inputs allow numerical adjustment of the `home` and `target` fields.
+/// - Buttons trigger actions to move or capture window positions.
 pub fn render_window_controls(ui: &mut egui::Ui, window: &mut Window) {
     // Home position controls
     ui.horizontal(|ui| {
@@ -302,14 +385,47 @@ pub fn is_valid_key_combo(input: &str) -> bool {
 
 /// Saves a list of workspaces to a JSON file.
 ///
-/// # Arguments
-/// - `workspaces`: A reference to the list of workspaces to save.
-/// - `file_path`: The path to the file where the workspaces should be saved.
+/// This function serializes the list of `Workspace` objects into a JSON string
+/// and writes it to a specified file. If the file does not exist, it is created.
+/// If serialization or file writing fails, appropriate error messages are logged.
+///
+/// # Behavior
+/// - Serializes the `workspaces` list into JSON format using `serde_json`.
+/// - Writes the JSON string to the specified file path.
+/// - Logs success or failure of the operation.
 ///
 /// # Example
-/// ```
+/// ```rust
+/// let workspaces = vec![Workspace {
+///     name: "Workspace 1".to_string(),
+///     hotkey: Some("Ctrl+Alt+1".to_string()),
+///     windows: vec![],
+///     disabled: false,
+///     valid: true,
+/// }];
+///
 /// save_workspaces(&workspaces, "workspaces.json");
-/// ```/// Saves the current workspaces to a file in JSON format.
+/// ```
+///
+/// # Dependencies
+/// - Relies on `serde_json` for serialization.
+/// - Uses Rust's standard `File` and `Write` traits for file handling.
+///
+/// # Parameters
+/// - `workspaces: &[Workspace]`: A reference to the list of `Workspace` objects to be saved.
+/// - `file_path: &str`: The path to the file where the serialized data will be written.
+///
+/// # Side Effects
+/// - Creates or overwrites the specified file with the serialized workspace data.
+///
+/// # Error Conditions
+/// - Logs an error if:
+///   - Serialization fails (e.g., due to invalid data).
+///   - File creation or writing fails (e.g., due to insufficient permissions).
+///
+/// # Notes
+/// - Ensure the `workspaces` list is properly populated before calling this function.
+/// - The function does not return errors but logs them for debugging purposes.
 pub fn save_workspaces(workspaces: &[Workspace], file_path: &str) {
     match serde_json::to_string_pretty(workspaces) {
         Ok(json) => {
@@ -329,22 +445,14 @@ pub fn save_workspaces(workspaces: &[Workspace], file_path: &str) {
 
 /// Loads a list of workspaces from a JSON file.
 ///
-/// This function reads a JSON file containing workspace configurations and attempts to register
-/// the hotkeys associated with each workspace using the provided `App` instance. If the file does
-/// not exist or contains invalid data, an empty workspace list is returned. Hotkeys that cannot be
-/// registered are logged as warnings.
-///
-/// # Arguments
-/// - `file_path`: The path to the file to load workspaces from.
-/// - `app`: A reference to the `App` instance used to manage registered hotkeys.
-///
-/// # Returns
-/// - A `Vec<Workspace>` containing the loaded workspaces, with their hotkeys registered if possible.
-/// - An empty vector if the file is missing or invalid.
+/// This function reads a JSON file containing workspace configurations and deserializes it into a vector of `Workspace` objects.
+/// It also attempts to register any associated hotkeys using the provided `App` instance.
 ///
 /// # Behavior
-/// - If a workspace's hotkey is valid and not already registered, it is registered successfully.
-/// - If a hotkey fails to register, a warning is logged but the workspace is still included in the list.
+/// - Reads the specified file and parses its contents as JSON.
+/// - Registers hotkeys for each workspace if the hotkey is valid and not already registered.
+/// - Logs warnings for invalid or unregistered hotkeys.
+/// - If the file is missing or invalid, returns an empty list.
 ///
 /// # Example
 /// ```rust
@@ -355,9 +463,32 @@ pub fn save_workspaces(workspaces: &[Workspace], file_path: &str) {
 ///     initial_validation_done: Arc::new(Mutex::new(false)),
 ///     registered_hotkeys: Arc::new(Mutex::new(HashMap::new())),
 /// };
-///
 /// let workspaces = load_workspaces("workspaces.json", &app);
 /// ```
+///
+/// # Dependencies
+/// - Relies on `serde_json` for deserialization.
+/// - Uses the `register_hotkey` function to attempt hotkey registration.
+///
+/// # Parameters
+/// - `file_path: &str`: The path to the JSON file containing workspace data.
+/// - `app: &App`: Reference to the `App` instance for managing hotkey registration.
+///
+/// # Returns
+/// - A `Vec<Workspace>` containing the loaded workspaces, with hotkeys registered where possible.
+///
+/// # Side Effects
+/// - Modifies the `registered_hotkeys` field of the `App` instance by adding valid hotkeys.
+///
+/// # Error Conditions
+/// - Logs warnings if:
+///   - The file cannot be read.
+///   - The JSON is invalid or cannot be deserialized.
+///   - A hotkey cannot be registered.
+///
+/// # Notes
+/// - Ensure the file exists and is in the correct JSON format.
+/// - Hotkeys that fail registration are not removed from the workspace but are logged as invalid.
 pub fn load_workspaces(file_path: &str, app: &App) -> Vec<Workspace> {
     let mut content = String::new();
     match File::open(file_path) {

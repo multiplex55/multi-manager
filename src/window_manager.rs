@@ -267,19 +267,46 @@ fn is_window_at_position(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) -> bool {
 
 /// Retrieves the current position and size of a window.
 ///
-/// # Arguments
-/// - `hwnd`: The handle to the window.
+/// This function uses the Win32 API `GetWindowRect` to obtain the coordinates of the window's
+/// bounding rectangle. It calculates the width and height from the `RECT` structure and returns
+/// the position and size of the window as a tuple.
 ///
-/// # Returns
-/// - A tuple `(x, y, width, height)` representing the window's position and size.
-/// - `Err` if the window position cannot be retrieved.
+/// # Behavior
+/// - If the window handle (`hwnd`) is valid, the function returns a tuple of `(x, y, width, height)`.
+/// - If the window handle is invalid or the call to `GetWindowRect` fails, an error is returned.
 ///
 /// # Example
-/// ```
-/// if let Ok((x, y, w, h)) = get_window_position(hwnd) {
-///     println!("Window position: ({}, {}, {}, {})", x, y, w, h);
+/// ```rust
+/// use windows::Win32::Foundation::HWND;
+///
+/// let hwnd = HWND(12345 as *mut _); // Example HWND
+/// match get_window_position(hwnd) {
+///     Ok((x, y, w, h)) => println!("Window position: ({}, {}, {}, {})", x, y, w, h),
+///     Err(err) => println!("Failed to get window position: {}", err),
 /// }
 /// ```
+///
+/// # Dependencies
+/// - Calls the `GetWindowRect` function from the Win32 API to retrieve the window's rectangle.
+///
+/// # Returns
+/// - `Ok((x, y, width, height))`: If the window's position and size are successfully retrieved.
+/// - `Err(windows::core::Error)`: If the `GetWindowRect` API call fails or the window handle is invalid.
+///
+/// # Parameters
+/// - `hwnd: HWND`: The handle to the window whose position and size are being queried.
+///
+/// # Side Effects
+/// - None.
+///
+/// # Error Conditions
+/// - Returns an error if the `hwnd` is invalid or the `GetWindowRect` API call fails.
+///
+/// # Notes
+/// - Ensure the `hwnd` passed to this function is valid before calling.
+///
+/// # Win32 API Reference
+/// - [`GetWindowRect`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowrect)
 pub fn get_window_position(hwnd: HWND) -> Result<(i32, i32, i32, i32)> {
     unsafe {
         let mut rect = RECT::default();
