@@ -1,5 +1,5 @@
 use crate::utils::*;
-use crate::window_manager::{check_hotkeys, register_hotkey, unregister_hotkey};
+use crate::window_manager::{check_hotkeys, register_hotkey};
 use crate::workspace::*;
 use eframe::egui;
 use eframe::egui::ViewportBuilder;
@@ -11,7 +11,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
-use windows::Win32::Foundation::HWND;
 
 #[derive(Clone)]
 pub struct App {
@@ -138,6 +137,7 @@ impl App {
                 let workspaces_len = workspaces.len();
 
                 for (i, workspace) in workspaces.iter_mut().enumerate() {
+                    workspace.validate_workspace();
                     let header_text = workspace.get_header_text();
                     let header_id = egui::Id::new(format!("workspace_{}_header", i));
 

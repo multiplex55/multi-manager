@@ -74,7 +74,6 @@ impl Workspace {
         ui.horizontal(|ui| {
             ui.label("Hotkey:");
             let mut temp_hotkey = self.hotkey.clone().unwrap_or_else(|| "None".to_string());
-            debug!("temp hotkey before edit: {}", temp_hotkey);
             if ui.text_edit_singleline(&mut temp_hotkey).changed() {
                 match self.set_hotkey(&temp_hotkey) {
                     Ok(_) => {
@@ -156,26 +155,24 @@ impl Workspace {
                     );
                     
         } else {
-            ui.colored_label(egui::Color32::RED, format!("HWND: {:?}", window.id));
-            if ui.button("Recapture").clicked() {
-                if let Some("Enter") = listen_for_keys_with_dialog() {
-                    if let Some((new_hwnd, new_title)) = get_active_window() {
-                        // Update the invalid window with the new HWND but retain home/target
-                        window.id = new_hwnd.0 as usize;
-                        window.title = new_title;
-                        info!(
-                            "Recaptured window '{}', new HWND: {:?}",
-                            window.title, new_hwnd
-                            );
-                        } else {
-                            warn!("Recapture canceled or no active window detected.");
+                ui.colored_label(egui::Color32::RED, format!("HWND: {:?}", window.id));
+                if ui.button("Recapture").clicked() {
+                    if let Some("Enter") = listen_for_keys_with_dialog() {
+                        if let Some((new_hwnd, new_title)) = get_active_window() {
+                            // Update the invalid window with the new HWND but retain home/target
+                            window.id = new_hwnd.0 as usize;
+                            window.title = new_title;
+                            info!(
+                                "Recaptured window '{}', new HWND: {:?}",
+                                window.title, new_hwnd
+                                );
+                            } else {
+                                warn!("Recapture canceled or no active window detected.");
+                            }
                         }
                     }
                 }
-            }
-                
             });
-
             // Render controls for individual window
             render_window_controls(ui, window);
         }
@@ -196,6 +193,19 @@ impl Workspace {
                 });
             }
         }
+    }
+    pub fn validate_workspace(&mut self){
+        self.valid = {
+            let hotkey_valid = self
+                .hotkey
+                .as_ref().is_some_and(|hotkey| is_valid_key_combo(hotkey));
+    
+            let any_valid_window = self.windows.iter().any(|window| {
+                unsafe { IsWindow(HWND(window.id as *mut std::ffi::c_void)).as_bool() }
+            });
+    
+            hotkey_valid && any_valid_window
+        };
     }
 }
 
