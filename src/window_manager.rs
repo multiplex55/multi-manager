@@ -195,6 +195,16 @@ pub fn toggle_workspace_windows(workspace: &mut Workspace) {
             }
         }
 
+        unsafe {
+            if IsIconic(hwnd).as_bool() {
+                if !ShowWindow(hwnd, SW_RESTORE).as_bool() {
+                    warn!("Failed to restore minimized window '{}'.", window.title);
+                } else {
+                    info!("Restored minimized window '{}'.", window.title);
+                }
+            }
+        }
+
         let target_position = if all_at_home {
             window.target
         } else {
