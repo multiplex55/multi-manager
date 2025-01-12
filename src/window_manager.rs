@@ -1,6 +1,7 @@
 use crate::gui::App;
 use crate::workspace::Workspace;
 use log::{error, info, warn};
+use std::time::Instant;
 use windows::core::{Result, PCWSTR};
 use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
@@ -548,4 +549,70 @@ pub fn listen_for_keys_with_dialog() -> Option<&'static str> {
             }
         }
     }
+}
+
+/// Checks for pressed hotkeys and triggers the associated workspace actions.
+pub fn check_hotkeys(app: &App) {
+    let mut workspaces_to_toggle = Vec::new();
+    let workspaces = app.workspaces.lock().unwrap();
+
+    for (i, workspace) in workspaces.iter().enumerate() {
+        if workspace.disabled {
+            continue;
+        }
+
+        if let Some(ref hotkey) = workspace.hotkey {
+            if is_hotkey_pressed(hotkey) {
+                workspaces_to_toggle.push(i);
+                let mut last_hotkey_info = app.last_hotkey_info.lock().unwrap();
+                *last_hotkey_info = Some((hotkey.clone(), Instant::now()));
+            }
+        }
+    }
+
+    drop(workspaces); // Release lock before toggling
+
+    let mut workspaces = app.workspaces.lock().unwrap();
+    for index in workspaces_to_toggle {
+        if let Some(workspace) = workspaces.get_mut(index) {
+            toggle_workspace_windows(workspace);
+        }
+    }
+}
+
+/// Listens for key input and retrieves the currently active window.
+pub fn listen_for_keys_with_dialog_and_window() -> Option<(&'static str, HWND, String)> {
+    unsafe {
+        MessageBoxW(
+            None,
+            PCWSTR(
+                "Press Enter to confirm or Escape to cancel."
+                    .encode_utf16()
+                    .chain(Some(0))
+                    .collect::<Vec<_>>()
+                    .as_ptr(),
+            ),
+            PCWSTR(
+                "Action Required"
+                    .encode_utf16()
+                    .chain(Some(0))
+                    .collect::<Vec<_>>()
+                    .as_ptr(),
+            ),
+            MB_OK | MB_ICONINFORMATION,
+        );
+
+        loop {
+            if GetAsyncKeyState(VK_RETURN.0 as i32) < 0 {
+                if let Some((hwnd, title)) = get_active_window() {
+                    return Some(("Enter", hwnd, title));
+                }
+                break;
+            }
+            if GetAsyncKeyState(VK_ESCAPE.0 as i32) < 0 {
+                break;
+            }
+        }
+    }
+    None
 }

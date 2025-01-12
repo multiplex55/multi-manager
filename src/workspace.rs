@@ -1,10 +1,16 @@
 use crate::gui::App;
+use crate::window_manager::get_window_position;
+use crate::window_manager::listen_for_keys_with_dialog_and_window;
+use crate::window_manager::move_window;
 use crate::window_manager::register_hotkey;
+use eframe::egui;
+use log::debug;
 use log::{error, info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{Read, Write};
+use windows::Win32::Foundation::HWND;
 
 /// Represents a workspace, which groups multiple windows and allows toggling between specific positions.
 ///
@@ -49,8 +55,137 @@ impl Workspace {
             Err(format!("Invalid hotkey: '{}'", hotkey))
         }
     }
+    /// Returns the header text with color coding based on the workspace state.
+    pub fn get_header_text(&self) -> egui::RichText {
+        if self.disabled {
+            egui::RichText::new(&self.name).color(egui::Color32::ORANGE)
+        } else if self.valid {
+            egui::RichText::new(&self.name).color(egui::Color32::GREEN)
+        } else {
+            egui::RichText::new(&self.name).color(egui::Color32::RED)
+        }
+    }
+
+    /// Renders the workspace details, such as hotkey and windows.
+    pub fn render_details(&mut self, ui: &mut egui::Ui) {
+        // Hotkey section
+        ui.horizontal(|ui| {
+            ui.label("Hotkey:");
+            let mut temp_hotkey = self.hotkey.clone().unwrap_or_else(|| "None".to_string());
+            debug!("temp hotkey before edit: {}", temp_hotkey);
+            if ui.text_edit_singleline(&mut temp_hotkey).changed() {
+                match self.set_hotkey(&temp_hotkey) {
+                    Ok(_) => {
+                        self.hotkey = Some(temp_hotkey); // Update the workspace's hotkey
+                        ui.colored_label(egui::Color32::GREEN, "Valid");
+                        debug!(
+                            "Hotkey updated to: {}",
+                            self.hotkey.as_deref().unwrap_or("None")
+                        );
+                    }
+                    Err(err) => {
+                        ui.colored_label(egui::Color32::RED, "Invalid");
+                        debug!("Hotkey validation failed: {}", err);
+                    }
+                }
+            }
+        });
+
+        // Render windows
+        let mut window_to_delete = None;
+        for (i, window) in self.windows.iter_mut().enumerate() {
+            ui.horizontal(|ui| {
+                // Display window title
+                ui.label(&window.title);
+
+                // Show HWND label with validity coloring
+                if window.valid {
+                    ui.colored_label(egui::Color32::GREEN, format!("HWND: {:?}", window.id));
+                } else {
+                    ui.colored_label(egui::Color32::RED, format!("HWND: {:?}", window.id));
+                }
+
+                // Add delete button
+                if ui.button("Delete").clicked() {
+                    window_to_delete = Some(i);
+                }
+            });
+
+            // Render controls for individual window
+            render_window_controls(ui, window);
+        }
+
+        if let Some(index) = window_to_delete {
+            self.windows.remove(index);
+        }
+
+        // Capture active window button
+        if ui.button("Capture Active Window").clicked() {
+            if let Some(("Enter", hwnd, title)) = listen_for_keys_with_dialog_and_window() {
+                self.windows.push(Window {
+                    id: hwnd.0 as usize,
+                    title,
+                    home: (0, 0, 800, 600),
+                    target: (0, 0, 800, 600),
+                    valid: true,
+                });
+            }
+        }
+    }
 }
 
+/// Renders the controls for a specific window within the workspace.
+pub fn render_window_controls(ui: &mut egui::Ui, window: &mut Window) {
+    // Home position controls
+    ui.horizontal(|ui| {
+        ui.label("Home:");
+        ui.add(egui::DragValue::new(&mut window.home.0).prefix("x: "));
+        ui.add(egui::DragValue::new(&mut window.home.1).prefix("y: "));
+        ui.add(egui::DragValue::new(&mut window.home.2).prefix("w: "));
+        ui.add(egui::DragValue::new(&mut window.home.3).prefix("h: "));
+        if ui.button("Capture Home").clicked() {
+            if let Ok((x, y, w, h)) = get_window_position(HWND(window.id as *mut _)) {
+                window.home = (x, y, w, h);
+            }
+        }
+        if ui.button("Move to Home").clicked() {
+            if let Err(e) = move_window(
+                HWND(window.id as *mut _),
+                window.home.0,
+                window.home.1,
+                window.home.2,
+                window.home.3,
+            ) {
+                warn!("Failed to move window to home: {}", e);
+            }
+        }
+    });
+
+    // Target position controls
+    ui.horizontal(|ui| {
+        ui.label("Target:");
+        ui.add(egui::DragValue::new(&mut window.target.0).prefix("x: "));
+        ui.add(egui::DragValue::new(&mut window.target.1).prefix("y: "));
+        ui.add(egui::DragValue::new(&mut window.target.2).prefix("w: "));
+        ui.add(egui::DragValue::new(&mut window.target.3).prefix("h: "));
+        if ui.button("Capture Target").clicked() {
+            if let Ok((x, y, w, h)) = get_window_position(HWND(window.id as *mut _)) {
+                window.target = (x, y, w, h);
+            }
+        }
+        if ui.button("Move to Target").clicked() {
+            if let Err(e) = move_window(
+                HWND(window.id as *mut _),
+                window.target.0,
+                window.target.1,
+                window.target.2,
+                window.target.3,
+            ) {
+                warn!("Failed to move window to target: {}", e);
+            }
+        }
+    });
+}
 /// Represents a window tracked within a workspace.
 ///
 /// # Fields
