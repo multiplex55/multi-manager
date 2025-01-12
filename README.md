@@ -5,7 +5,7 @@ Multi Manager is a robust workspace and window management application built usin
 https://github.com/user-attachments/assets/452cc353-c795-428a-a3e7-dca2cd9c3ce0
 
 
-- **In Development**: Note that this project is still in heavy development and subject to change. Feedback appreciated.
+- **In Development**: Note that this project is still in heavy development and subject to change. Features may be different than what appears in the video.Feedback appreciated.
 
 ---
 

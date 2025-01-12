@@ -125,7 +125,7 @@ impl EframeApp for App {
             }
             ui.separator();
 
-            egui::ScrollArea::vertical()
+            egui::ScrollArea::both()
                 .auto_shrink([false;2])
                 .show(ui, |ui| {
                     let mut workspaces = self.workspaces.lock().unwrap();
@@ -262,6 +262,21 @@ impl EframeApp for App {
                                             ui.colored_label(egui::Color32::GREEN, format!("HWND: {:?}", window.id));
                                         } else {
                                             ui.colored_label(egui::Color32::RED, format!("HWND: {:?}", window.id));
+                                            if ui.button("Recapture").clicked() {
+                                                if let Some("Enter") = listen_for_keys_with_dialog() {
+                                                    if let Some((new_hwnd, new_title)) = get_active_window() {
+                                                        // Update the invalid window with the new HWND but retain home/target
+                                                        window.id = new_hwnd.0 as usize;
+                                                        window.title = new_title;
+                                                        info!(
+                                                            "Recaptured window '{}', new HWND: {:?}",
+                                                            window.title, new_hwnd
+                                                        );
+                                                    } else {
+                                                        warn!("Recapture canceled or no active window detected.");
+                                                    }
+                                                }
+                                            }
                                         }
                                     });
                                 
