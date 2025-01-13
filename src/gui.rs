@@ -1,3 +1,4 @@
+use crate::hotkey_manager::HotkeyManager;
 use crate::utils::*;
 use crate::window_manager::{check_hotkeys, register_hotkey};
 use crate::workspace::*;
@@ -20,6 +21,7 @@ pub struct App {
     pub hotkey_promise: Arc<Mutex<Option<Promise<()>>>>,
     pub initial_validation_done: Arc<Mutex<bool>>,
     pub registered_hotkeys: Arc<Mutex<HashMap<String, usize>>>,
+    pub hotkey_manager: Arc<HotkeyManager>,
 }
 
 pub struct WorkspaceControlContext<'a> {
@@ -194,6 +196,7 @@ impl App {
                     windows: Vec::new(),
                     disabled: false,
                     valid: false,
+                    hotkey_manager: default_hotkey_manager(),
                 });
             }
         });

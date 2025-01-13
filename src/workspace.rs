@@ -9,10 +9,14 @@ use log::{error, info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
+use std::hash::DefaultHasher;
 use std::io::{Read, Write};
+use std::sync::Arc;
 use windows::Win32::Foundation::HWND;
 use crate::window_manager::*;
 use windows::Win32::UI::WindowsAndMessaging::IsWindow;
+use crate::hotkey_manager::HotkeyManager;
+use std::hash::{Hash,Hasher};
 
 /// Represents a workspace, which groups multiple windows and allows toggling between specific positions.
 ///
@@ -28,8 +32,13 @@ pub struct Workspace {
     pub windows: Vec<Window>,
     pub disabled: bool,
     pub valid: bool,
+    #[serde(skip)]
+    #[serde(default = "default_hotkey_manager")] 
+    pub hotkey_manager: Arc<HotkeyManager>, // HERE
 }
-
+pub fn default_hotkey_manager() -> Arc<HotkeyManager> {
+    Arc::new(HotkeyManager::new()) // Replace `new()` with the actual constructor if different
+}
 impl Workspace {
     /// Sets the hotkey for the workspace.
     ///
@@ -51,12 +60,34 @@ impl Workspace {
     /// ```
     pub fn set_hotkey(&mut self, hotkey: &str) -> Result<(), String> {
         if is_valid_key_combo(hotkey) {
-            self.hotkey = Some(hotkey.to_string());
-            Ok(())
+            // Unregister the existing hotkey if present
+            if let Some(current_hotkey) = &self.hotkey {
+                let registered_hotkeys = self.hotkey_manager.get_registered_hotkeys();
+                if let Some(id) = registered_hotkeys.get(current_hotkey) {
+                    self.hotkey_manager.unregister(*id);
+                }
+            }
+    
+            // Generate a unique ID for the hotkey
+            let id = {
+                let mut hasher = DefaultHasher::new();
+                self.name.hash(&mut hasher);
+                hasher.finish() as usize
+            };
+    
+            // Register the new hotkey
+            if self.hotkey_manager.register(id, hotkey) {
+                self.hotkey = Some(hotkey.to_string());
+                Ok(())
+            } else {
+                Err(format!("Failed to register hotkey: '{}'", hotkey))
+            }
         } else {
             Err(format!("Invalid hotkey: '{}'", hotkey))
         }
     }
+    
+    
     /// Returns the header text with color coding based on the workspace state.
     pub fn get_header_text(&self) -> egui::RichText {
         if self.disabled {
@@ -249,6 +280,15 @@ impl Workspace {
             let any_valid_window = self.windows.iter().any(|window| {
                 unsafe { IsWindow(HWND(window.id as *mut std::ffi::c_void)).as_bool() }
             });
+            if !hotkey_valid {
+                if let Some(current_hotkey) = &self.hotkey {
+                    if let Some(id) = self.hotkey_manager.get_registered_hotkeys().get(current_hotkey) {
+                        self.hotkey_manager.unregister(*id); // Unregister the hotkey using its ID
+                    }
+                }
+                
+                
+            }
     
             hotkey_valid && any_valid_window
         };

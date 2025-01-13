@@ -1,10 +1,12 @@
 #![windows_subsystem = "windows"]
 
 mod gui;
+mod hotkey_manager;
 mod utils;
 mod window_manager;
 mod workspace;
 
+use hotkey_manager::HotkeyManager;
 use log::info;
 use std::collections::HashMap;
 use std::env;
@@ -20,6 +22,7 @@ fn main() {
     env::set_var("RUST_BACKTRACE", "1");
 
     info!("Starting Multi Manager application...");
+    let hotkey_manager = Arc::new(HotkeyManager::new());
 
     // Initialize the application states
     let app = gui::App {
@@ -29,6 +32,7 @@ fn main() {
         hotkey_promise: Arc::new(Mutex::new(None)),   // Initialize the promise
         initial_validation_done: Arc::new(Mutex::new(false)), // Initialize flag to false
         registered_hotkeys: Arc::new(Mutex::new(HashMap::new())), // Initialize the map
+        hotkey_manager,
     };
 
     // Launch GUI and set the taskbar icon after creating the window
