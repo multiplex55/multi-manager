@@ -2,7 +2,6 @@ use crate::gui::App;
 use crate::window_manager::get_window_position;
 use crate::window_manager::listen_for_keys_with_dialog_and_window;
 use crate::window_manager::move_window;
-use crate::window_manager::register_hotkey;
 use eframe::egui;
 use log::debug;
 use log::{error, info, warn};
@@ -13,6 +12,7 @@ use std::io::{Read, Write};
 use windows::Win32::Foundation::HWND;
 use crate::window_manager::*;
 use windows::Win32::UI::WindowsAndMessaging::IsWindow;
+use crate::hotkey::Hotkey;
 
 /// Represents a workspace, which groups multiple windows and allows toggling between specific positions.
 ///
@@ -24,7 +24,7 @@ use windows::Win32::UI::WindowsAndMessaging::IsWindow;
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Workspace {
     pub name: String,
-    pub hotkey: Option<String>,
+    pub hotkey: Option<Hotkey>,
     pub windows: Vec<Window>,
     pub disabled: bool,
     pub valid: bool,
@@ -50,13 +50,15 @@ impl Workspace {
     /// }
     /// ```
     pub fn set_hotkey(&mut self, hotkey: &str) -> Result<(), String> {
-        if is_valid_key_combo(hotkey) {
-            self.hotkey = Some(hotkey.to_string());
-            Ok(())
-        } else {
-            Err(format!("Invalid hotkey: '{}'", hotkey))
+        match Hotkey::new(hotkey) {
+            Ok(new_hotkey) => {
+                self.hotkey = Some(new_hotkey);
+                Ok(())
+            }
+            Err(e) => Err(e),
         }
     }
+    
     /// Returns the header text with color coding based on the workspace state.
     pub fn get_header_text(&self) -> egui::RichText {
         if self.disabled {
@@ -74,34 +76,23 @@ impl Workspace {
         ui.horizontal(|ui| {
             ui.label("Hotkey:");
         
-            // Extract current hotkey or use a default placeholder
-            let mut temp_hotkey = self.hotkey.clone().unwrap_or_else(|| "None".to_string());
+            let mut temp_hotkey = self
+                .hotkey
+                .as_ref()
+                .map(|h| h.key_sequence.clone())
+                .unwrap_or_else(|| "None".to_string());
         
-            // Render the hotkey text edit field
-            if ui.text_edit_singleline(&mut temp_hotkey).changed() {
-                // Validate the new hotkey and update the workspace
-                match self.set_hotkey(&temp_hotkey) {
-                    Ok(_) => {
-                        self.hotkey = Some(temp_hotkey.clone());
-                        self.valid = true; // Update validity based on new hotkey
-                        ui.colored_label(egui::Color32::GREEN, "Valid");
-                        debug!("Hotkey updated to '{}'.", temp_hotkey);
+                if ui.text_edit_singleline(&mut temp_hotkey).changed() {
+                    match self.set_hotkey(&temp_hotkey) {
+                        Ok(_) => ui.colored_label(egui::Color32::GREEN, "Valid"),
+                        Err(_) => ui.colored_label(egui::Color32::RED, "Invalid"),
                     }
-                    Err(err) => {
-                        self.valid = false; // Mark invalid if the hotkey is incorrect
-                        ui.colored_label(egui::Color32::RED, "Invalid");
-                        debug!("Invalid hotkey: '{}', reason: {}", temp_hotkey, err);
-                    }
-                }
-            } else {
-                // Display the current validation state
-                if self.valid {
-                    ui.colored_label(egui::Color32::GREEN, "Valid");
                 } else {
-                    ui.colored_label(egui::Color32::RED, "Invalid");
+                    ui.colored_label(egui::Color32::GRAY, "")
                 }
-            }
+                
         });
+        
 
         // Render windows
         let mut window_to_delete = None;
@@ -253,9 +244,10 @@ impl Workspace {
 /// - The `disabled` state does not affect validation; it is treated independently.
     pub fn validate_workspace(&mut self){
         self.valid = {
-            let hotkey_valid = self
-                .hotkey
-                .as_ref().is_some_and(|hotkey| is_valid_key_combo(hotkey));
+            let hotkey_valid = self.hotkey.as_ref().map_or(false, |hotkey| {
+                is_valid_key_combo(&hotkey.key_sequence)
+            });
+            
     
             let any_valid_window = self.windows.iter().any(|window| {
                 unsafe { IsWindow(HWND(window.id as *mut std::ffi::c_void)).as_bool() }
@@ -513,8 +505,8 @@ pub fn load_workspaces(file_path: &str, app: &App) -> Vec<Workspace> {
                     info!("Successfully loaded workspaces from '{}'.", file_path);
 
                     for (i, workspace) in workspaces.iter_mut().enumerate() {
-                        if let Some(ref hotkey) = workspace.hotkey {
-                            if !register_hotkey(app, i as i32, hotkey) {
+                        if let Some(ref mut hotkey) = workspace.hotkey {
+                            if !hotkey.register(app, i as i32) {
                                 warn!(
                                     "Failed to register hotkey '{}' for workspace '{}'.",
                                     hotkey, workspace.name

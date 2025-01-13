@@ -1,4 +1,5 @@
 use crate::gui::App;
+use crate::hotkey::Hotkey;
 use crate::workspace::Workspace;
 use log::{error, info, warn};
 use std::time::Instant;
@@ -50,104 +51,6 @@ pub fn is_hotkey_pressed(key_sequence: &str) -> bool {
         unsafe { modifiers_pressed && GetAsyncKeyState(vk as i32) < 0 }
     } else {
         false
-    }
-}
-
-/// Registers a global hotkey for a workspace.
-///
-/// # Arguments
-/// - `app`: Reference to the `App` struct for tracking registered hotkeys.
-/// - `id`: The unique identifier for the hotkey.
-/// - `key_sequence`: The key sequence string (e.g., "Ctrl+Alt+H") to register.
-///
-/// # Returns
-/// - `true` if the hotkey was successfully registered.
-/// - `false` otherwise.
-///
-/// # Example
-/// ```
-/// if register_hotkey(1, "Ctrl+Shift+P") {
-///     println!("Hotkey registered!");
-/// }
-/// ```
-pub fn register_hotkey(app: &App, id: i32, key_sequence: &str) -> bool {
-    // Check if the hotkey is already registered
-    let registered_hotkeys = app.registered_hotkeys.lock().unwrap();
-    if registered_hotkeys.contains_key(key_sequence) {
-        // warn!("Hotkey '{}' is already registered.", key_sequence);
-        return false;
-    }
-    drop(registered_hotkeys); // Release lock early
-
-    // Proceed with normal registration
-    let mut modifiers: u32 = 0;
-    let mut vk_code: Option<u32> = None;
-
-    for part in key_sequence.split('+') {
-        match part.to_lowercase().as_str() {
-            "ctrl" => modifiers |= MOD_CONTROL.0,
-            "alt" => modifiers |= MOD_ALT.0,
-            "shift" => modifiers |= MOD_SHIFT.0,
-            "win" => modifiers |= MOD_WIN.0,
-            _ => {
-                vk_code = virtual_key_from_string(part);
-            }
-        }
-    }
-
-    if let Some(vk) = vk_code {
-        unsafe {
-            if RegisterHotKey(None, id, HOT_KEY_MODIFIERS(modifiers), vk).is_ok() {
-                // Update the registered hotkeys map
-                let mut registered_hotkeys = app.registered_hotkeys.lock().unwrap();
-                registered_hotkeys.insert(key_sequence.to_string(), id as usize);
-
-                info!("Registered hotkey '{}' with ID {}.", key_sequence, id);
-                return true;
-            } else {
-                error!("Failed to register hotkey: '{}'.", key_sequence);
-            }
-        }
-    } else {
-        warn!("Invalid hotkey sequence: '{}'.", key_sequence);
-    }
-
-    false
-}
-
-/// Unregisters a global hotkey based on its ID.
-///
-/// # Arguments
-/// - `app`: Reference to the `App` struct for tracking registered hotkeys.
-/// - `id`: The unique identifier of the hotkey to unregister.
-///
-/// # Example
-/// ```
-/// unregister_hotkey(&app, 1);
-/// ```
-pub fn unregister_hotkey(app: &App, id: i32) {
-    unsafe {
-        if UnregisterHotKey(None, id).is_ok() {
-            info!("Successfully unregistered hotkey with ID {}.", id);
-
-            // First, find the key associated with the ID
-            let key_to_remove = {
-                let registered_hotkeys = app.registered_hotkeys.lock().unwrap();
-                registered_hotkeys
-                    .iter()
-                    .find(|(_, &v)| v == id as usize)
-                    .map(|(key, _)| key.clone()) // Clone the key to avoid borrowing issues
-            };
-
-            // Now remove the key from the map if it exists
-            if let Some(key) = key_to_remove {
-                let mut registered_hotkeys = app.registered_hotkeys.lock().unwrap();
-                registered_hotkeys.remove(&key);
-                info!("Removed hotkey '{}' from the registry.", key);
-            }
-        } else {
-            warn!("Failed to unregister hotkey with ID {}.", id);
-        }
     }
 }
 
@@ -337,7 +240,7 @@ pub fn get_window_position(hwnd: HWND) -> Result<(i32, i32, i32, i32)> {
 ///     println!("Virtual key code: {}", vk);
 /// }
 /// ```
-fn virtual_key_from_string(key: &str) -> Option<u32> {
+pub fn virtual_key_from_string(key: &str) -> Option<u32> {
     match key.to_uppercase().as_str() {
         // Function keys
         "F1" => Some(0x70),
@@ -589,10 +492,10 @@ pub fn check_hotkeys(app: &App) {
         }
 
         if let Some(ref hotkey) = workspace.hotkey {
-            if is_hotkey_pressed(hotkey) {
+            if is_hotkey_pressed(&hotkey.key_sequence) {
                 workspaces_to_toggle.push(i);
                 let mut last_hotkey_info = app.last_hotkey_info.lock().unwrap();
-                *last_hotkey_info = Some((hotkey.clone(), Instant::now()));
+                *last_hotkey_info = Some((hotkey.key_sequence.clone(), Instant::now()));
             }
         }
     }

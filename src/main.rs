@@ -1,6 +1,7 @@
 #![windows_subsystem = "windows"]
 
 mod gui;
+mod hotkey;
 mod utils;
 mod window_manager;
 mod workspace;

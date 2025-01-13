@@ -1,5 +1,6 @@
+use crate::hotkey::Hotkey;
 use crate::utils::*;
-use crate::window_manager::{check_hotkeys, register_hotkey};
+use crate::window_manager::check_hotkeys;
 use crate::workspace::*;
 use eframe::egui;
 use eframe::egui::ViewportBuilder;
@@ -489,8 +490,8 @@ impl App {
         if !*initial_validation_done {
             let mut workspaces = self.workspaces.lock().unwrap();
             for (i, workspace) in workspaces.iter_mut().enumerate() {
-                if let Some(hotkey) = &workspace.hotkey {
-                    if !register_hotkey(self, i as i32, hotkey) {
+                if let Some(ref mut hotkey) = workspace.hotkey {
+                    if !hotkey.register(self, i as i32) {
                         warn!(
                             "Failed to register hotkey '{}' for workspace '{}'",
                             hotkey, workspace.name
