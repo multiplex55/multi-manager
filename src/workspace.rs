@@ -30,7 +30,7 @@ pub struct Workspace {
     pub valid: bool,
 }
 
-impl Workspace {
+impl Workspace { 
     /// Sets the hotkey for the workspace.
     ///
     /// Validates the provided hotkey and registers it for the workspace if valid.
@@ -73,21 +73,32 @@ impl Workspace {
         // Hotkey section
         ui.horizontal(|ui| {
             ui.label("Hotkey:");
+        
+            // Extract current hotkey or use a default placeholder
             let mut temp_hotkey = self.hotkey.clone().unwrap_or_else(|| "None".to_string());
+        
+            // Render the hotkey text edit field
             if ui.text_edit_singleline(&mut temp_hotkey).changed() {
+                // Validate the new hotkey and update the workspace
                 match self.set_hotkey(&temp_hotkey) {
                     Ok(_) => {
-                        self.hotkey = Some(temp_hotkey); // Update the workspace's hotkey
+                        self.hotkey = Some(temp_hotkey.clone());
+                        self.valid = true; // Update validity based on new hotkey
                         ui.colored_label(egui::Color32::GREEN, "Valid");
-                        debug!(
-                            "Hotkey updated to: {}",
-                            self.hotkey.as_deref().unwrap_or("None")
-                        );
+                        debug!("Hotkey updated to '{}'.", temp_hotkey);
                     }
                     Err(err) => {
+                        self.valid = false; // Mark invalid if the hotkey is incorrect
                         ui.colored_label(egui::Color32::RED, "Invalid");
-                        debug!("Hotkey validation failed: {}", err);
+                        debug!("Invalid hotkey: '{}', reason: {}", temp_hotkey, err);
                     }
+                }
+            } else {
+                // Display the current validation state
+                if self.valid {
+                    ui.colored_label(egui::Color32::GREEN, "Valid");
+                } else {
+                    ui.colored_label(egui::Color32::RED, "Invalid");
                 }
             }
         });
