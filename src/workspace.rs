@@ -1,7 +1,9 @@
 use crate::gui::App;
+use crate::hotkey::Hotkey;
 use crate::window_manager::get_window_position;
 use crate::window_manager::listen_for_keys_with_dialog_and_window;
 use crate::window_manager::move_window;
+use crate::window_manager::*;
 use eframe::egui;
 use log::debug;
 use log::{error, info, warn};
@@ -10,9 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{Read, Write};
 use windows::Win32::Foundation::HWND;
-use crate::window_manager::*;
 use windows::Win32::UI::WindowsAndMessaging::IsWindow;
-use crate::hotkey::Hotkey;
 
 /// Represents a workspace, which groups multiple windows and allows toggling between specific positions.
 ///
@@ -30,7 +30,7 @@ pub struct Workspace {
     pub valid: bool,
 }
 
-impl Workspace { 
+impl Workspace {
     /// Sets the hotkey for the workspace.
     ///
     /// Validates the provided hotkey and registers it for the workspace if valid.
@@ -58,7 +58,7 @@ impl Workspace {
             Err(e) => Err(e),
         }
     }
-    
+
     /// Returns the header text with color coding based on the workspace state.
     pub fn get_header_text(&self) -> egui::RichText {
         if self.disabled {
@@ -75,40 +75,55 @@ impl Workspace {
         // Hotkey section
         ui.horizontal(|ui| {
             ui.label("Hotkey:");
-        
+
             let mut temp_hotkey = self
                 .hotkey
                 .as_ref()
                 .map(|h| h.key_sequence.clone())
                 .unwrap_or_else(|| "None".to_string());
-        
+
             if ui.text_edit_singleline(&mut temp_hotkey).changed() {
-                // Attempt to set the hotkey
                 match self.set_hotkey(&temp_hotkey) {
                     Ok(_) => {
-                        ui.colored_label(egui::Color32::GREEN, "Valid");
+                        let valid_label = ui.colored_label(egui::Color32::GREEN, "Valid");
+                        Self::attach_context_menu(
+                            ui,
+                            &valid_label,
+                            "Valid Hotkey Options",
+                            &temp_hotkey,
+                        );
                         info!("Hotkey '{}' is valid and set.", temp_hotkey);
                     }
                     Err(_) => {
-                        ui.colored_label(egui::Color32::RED, "Invalid");
+                        let invalid_label = ui.colored_label(egui::Color32::RED, "Invalid");
+                        Self::attach_context_menu(
+                            ui,
+                            &invalid_label,
+                            "Invalid Hotkey Options",
+                            &temp_hotkey,
+                        );
                         warn!("Hotkey '{}' is invalid.", temp_hotkey);
                     }
                 }
+            } else if is_valid_key_combo(&temp_hotkey) {
+                let valid_label = ui.colored_label(egui::Color32::GREEN, "Valid");
+                Self::attach_context_menu(ui, &valid_label, "Valid Hotkey Options", &temp_hotkey);
             } else {
-                // Default message when nothing is edited
-                if is_valid_key_combo(&temp_hotkey) {
-                    ui.colored_label(egui::Color32::GREEN, "Valid");
-                } else {
-                    ui.colored_label(egui::Color32::GRAY, "Edit to validate");
-                }
+                let invalid_label = ui.colored_label(egui::Color32::GRAY, "Edit to validate");
+                Self::attach_context_menu(
+                    ui,
+                    &invalid_label,
+                    "Invalid Hotkey Options",
+                    &temp_hotkey,
+                );
             }
         });
-        
-        
 
-        // Render windows
+        // Create a copy of windows for iteration
+        let windows: Vec<_> = self.windows.iter_mut().collect();
         let mut window_to_delete = None;
-        for (i, window) in self.windows.iter_mut().enumerate() {
+
+        for (i, window) in windows.into_iter().enumerate() {
             ui.horizontal(|ui| {
                 // Display window title
                 ui.label(&window.title);
@@ -118,8 +133,9 @@ impl Workspace {
                     window_to_delete = Some(i);
                 }
 
-                let exists = unsafe { IsWindow(HWND(window.id as *mut std::ffi::c_void)).as_bool() }; 
-                // Add the colored indicator for HWND validity
+                // Handle HWND validity and right-click menu for individual windows
+                let exists =
+                    unsafe { IsWindow(HWND(window.id as *mut std::ffi::c_void)).as_bool() };
                 if exists {
                     // Define the label and capture its response
                     let label_response = ui.colored_label(
@@ -209,62 +225,114 @@ impl Workspace {
         }
     }
 
-/// Validates the state of a workspace.
-///
-/// This function ensures that a workspace is in a valid state by checking:
-/// - If the assigned hotkey (if any) is in a valid format.
-/// - If the workspace contains at least one valid window (an HWND that corresponds to an existing window).
-///
-/// The `valid` field of the workspace is updated accordingly.
-///
-/// # Behavior
-/// - Checks the validity of the hotkey using the `is_valid_key_combo` function.
-/// - Verifies the existence of at least one valid window using the Win32 API `IsWindow`.
-/// - Updates the `valid` field of the `Workspace` struct to `true` if both checks pass.
-///
-/// # Example
-/// ```rust
-/// let mut workspace = Workspace {
-///     name: "Example".to_string(),
-///     hotkey: Some("Ctrl+Alt+H".to_string()),
-///     windows: vec![Window {
-///         id: 12345,
-///         title: "Example Window".to_string(),
-///         home: (0, 0, 800, 600),
-///         target: (100, 100, 800, 600),
-///         valid: true,
-///     }],
-///     disabled: false,
-///     valid: false,
-/// };
-/// workspace.validate_workspace();
-/// assert!(workspace.valid);
-/// ```
-///
-/// # Dependencies
-/// - Relies on `is_valid_key_combo` for hotkey validation.
-/// - Uses the Win32 API `IsWindow` to check window validity.
-///
-/// # Parameters
-/// - No parameters. Operates directly on the instance of the `Workspace`.
-///
-/// # Side Effects
-/// - Updates the `valid` field of the `Workspace` struct.
-///
-/// # Notes
-/// - This function should be called whenever the state of a workspace changes (e.g., hotkey or windows are modified).
-/// - The `disabled` state does not affect validation; it is treated independently.
-    pub fn validate_workspace(&mut self){
+    /// Attaches a context menu to a UI widget.
+    ///
+    /// This function creates a context menu (popup) that appears when the user right-clicks
+    /// on the provided widget. The menu displays the specified options and can trigger
+    /// actions based on the selected option.
+    ///
+    /// # Parameters
+    /// - `ui`: The egui `Ui` instance to render the context menu.
+    /// - `widget_response`: The response object of the widget to which the menu is attached.
+    /// - `menu_title`: The title of the context menu.
+    /// - `context_info`: Additional information to display in the context menu.
+    ///
+    /// # Example
+    /// ```
+    /// attach_context_menu(ui, &response, "Hotkey Options", "Ctrl+Shift+P");
+    /// ```
+    pub fn attach_context_menu(
+        ui: &mut egui::Ui,
+        widget_response: &egui::Response,
+        menu_title: &str,
+        context_info: &str,
+    ) {
+        // Create a unique popup ID based on the menu title and context info
+        let popup_id = egui::Id::new(format!("{}_{}", menu_title, context_info));
+
+        // Open the popup when the widget is right-clicked
+        if widget_response.hovered() && ui.input(|i| i.pointer.secondary_clicked()) {
+            ui.memory_mut(|mem| mem.open_popup(popup_id));
+        }
+
+        // Render the popup menu
+        egui::popup::popup_below_widget(
+            ui,
+            popup_id,
+            widget_response,
+            egui::PopupCloseBehavior::CloseOnClickOutside,
+            |ui| {
+                ui.label(menu_title);
+                ui.separator();
+
+                if ui.button("Option 1").clicked() {
+                    println!("Option 1 clicked for: {}", context_info);
+                    ui.close_menu();
+                }
+                if ui.button("Option 2").clicked() {
+                    println!("Option 2 clicked for: {}", context_info);
+                    ui.close_menu();
+                }
+            },
+        );
+    }
+
+    /// Validates the state of a workspace.
+    ///
+    /// This function ensures that a workspace is in a valid state by checking:
+    /// - If the assigned hotkey (if any) is in a valid format.
+    /// - If the workspace contains at least one valid window (an HWND that corresponds to an existing window).
+    ///
+    /// The `valid` field of the workspace is updated accordingly.
+    ///
+    /// # Behavior
+    /// - Checks the validity of the hotkey using the `is_valid_key_combo` function.
+    /// - Verifies the existence of at least one valid window using the Win32 API `IsWindow`.
+    /// - Updates the `valid` field of the `Workspace` struct to `true` if both checks pass.
+    ///
+    /// # Example
+    /// ```rust
+    /// let mut workspace = Workspace {
+    ///     name: "Example".to_string(),
+    ///     hotkey: Some("Ctrl+Alt+H".to_string()),
+    ///     windows: vec![Window {
+    ///         id: 12345,
+    ///         title: "Example Window".to_string(),
+    ///         home: (0, 0, 800, 600),
+    ///         target: (100, 100, 800, 600),
+    ///         valid: true,
+    ///     }],
+    ///     disabled: false,
+    ///     valid: false,
+    /// };
+    /// workspace.validate_workspace();
+    /// assert!(workspace.valid);
+    /// ```
+    ///
+    /// # Dependencies
+    /// - Relies on `is_valid_key_combo` for hotkey validation.
+    /// - Uses the Win32 API `IsWindow` to check window validity.
+    ///
+    /// # Parameters
+    /// - No parameters. Operates directly on the instance of the `Workspace`.
+    ///
+    /// # Side Effects
+    /// - Updates the `valid` field of the `Workspace` struct.
+    ///
+    /// # Notes
+    /// - This function should be called whenever the state of a workspace changes (e.g., hotkey or windows are modified).
+    /// - The `disabled` state does not affect validation; it is treated independently.
+    pub fn validate_workspace(&mut self) {
         self.valid = {
-            let hotkey_valid = self.hotkey.as_ref().map_or(false, |hotkey| {
-                is_valid_key_combo(&hotkey.key_sequence)
+            let hotkey_valid = self
+                .hotkey
+                .as_ref()
+                .map_or(false, |hotkey| is_valid_key_combo(&hotkey.key_sequence));
+
+            let any_valid_window = self.windows.iter().any(|window| unsafe {
+                IsWindow(HWND(window.id as *mut std::ffi::c_void)).as_bool()
             });
-            
-    
-            let any_valid_window = self.windows.iter().any(|window| {
-                unsafe { IsWindow(HWND(window.id as *mut std::ffi::c_void)).as_bool() }
-            });
-    
+
             hotkey_valid && any_valid_window
         };
     }
