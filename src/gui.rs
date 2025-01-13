@@ -327,15 +327,7 @@ impl App {
         // Workspace disable checkbox
         ui.horizontal(|ui| {
             ui.checkbox(&mut workspace.disabled, "Disable Workspace");
-        });
 
-        ui.horizontal(|ui| {
-            if context.index > 0 && ui.button("Move ⏶").clicked() {
-                *context.move_up_index = Some(context.index);
-            }
-            if context.index < context.workspaces_len - 1 && ui.button("Move ⏷").clicked() {
-                *context.move_down_index = Some(context.index);
-            }
             if ui.button("Delete Workspace").clicked() {
                 let confirmation_message = format!(
                     "Are you sure you want to delete workspace '{}'? This action cannot be undone.",
@@ -344,6 +336,15 @@ impl App {
                 if show_confirmation_box(&confirmation_message, "Confirm Deletion") {
                     *context.workspace_to_delete = Some(context.index);
                 }
+            }
+        });
+
+        ui.horizontal(|ui| {
+            if context.index > 0 && ui.button("Move ⏶").clicked() {
+                *context.move_up_index = Some(context.index);
+            }
+            if context.index < context.workspaces_len - 1 && ui.button("Move ⏷").clicked() {
+                *context.move_down_index = Some(context.index);
             }
         });
     }

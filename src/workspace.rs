@@ -82,16 +82,28 @@ impl Workspace {
                 .map(|h| h.key_sequence.clone())
                 .unwrap_or_else(|| "None".to_string());
         
-                if ui.text_edit_singleline(&mut temp_hotkey).changed() {
-                    match self.set_hotkey(&temp_hotkey) {
-                        Ok(_) => ui.colored_label(egui::Color32::GREEN, "Valid"),
-                        Err(_) => ui.colored_label(egui::Color32::RED, "Invalid"),
+            if ui.text_edit_singleline(&mut temp_hotkey).changed() {
+                // Attempt to set the hotkey
+                match self.set_hotkey(&temp_hotkey) {
+                    Ok(_) => {
+                        ui.colored_label(egui::Color32::GREEN, "Valid");
+                        info!("Hotkey '{}' is valid and set.", temp_hotkey);
                     }
-                } else {
-                    ui.colored_label(egui::Color32::GRAY, "")
+                    Err(_) => {
+                        ui.colored_label(egui::Color32::RED, "Invalid");
+                        warn!("Hotkey '{}' is invalid.", temp_hotkey);
+                    }
                 }
-                
+            } else {
+                // Default message when nothing is edited
+                if is_valid_key_combo(&temp_hotkey) {
+                    ui.colored_label(egui::Color32::GREEN, "Valid");
+                } else {
+                    ui.colored_label(egui::Color32::GRAY, "Edit to validate");
+                }
+            }
         });
+        
         
 
         // Render windows
