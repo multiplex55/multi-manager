@@ -5,7 +5,6 @@ use crate::window_manager::listen_for_keys_with_dialog_and_window;
 use crate::window_manager::move_window;
 use crate::window_manager::*;
 use eframe::egui;
-use log::debug;
 use log::{error, info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -59,7 +58,27 @@ impl Workspace {
         }
     }
 
-    /// Returns the header text with color coding based on the workspace state.
+    /// Produces an egui `RichText` label for the workspace **header**, color-coded to represent its state.
+    ///
+    /// # Behavior
+    /// - Checks the `disabled` and `valid` fields of `self`:
+    ///   - **Disabled** workspaces: orange text
+    ///   - **Valid** workspaces (i.e., at least one valid window + valid hotkey): green text
+    ///   - **Invalid** workspaces: red text
+    /// - Returns an `egui::RichText` object, which can be displayed in the GUI (e.g., in a collapsible header).
+    ///
+    /// # Side Effects
+    /// - None. It simply returns a text object; no state is mutated.
+    ///
+    /// # Example
+    /// ```rust
+    /// let header_label = workspace.get_header_text();
+    /// ui.label(header_label);
+    /// ```
+    ///
+    /// # Notes
+    /// - Commonly used in the collapsible headers of each workspace in the UI.
+    /// - Helps visually distinguish disabled/invalid workspaces at a glance.
     pub fn get_header_text(&self) -> egui::RichText {
         if self.disabled {
             egui::RichText::new(&self.name).color(egui::Color32::ORANGE)
@@ -325,10 +344,8 @@ impl Workspace {
     pub fn validate_workspace(&mut self) {
         self.valid = {
             let hotkey_valid = self
-                .hotkey
-                .as_ref()
-                .map_or(false, |hotkey| is_valid_key_combo(&hotkey.key_sequence));
-
+            .hotkey
+            .as_ref().is_some_and(|hotkey| is_valid_key_combo(&hotkey.key_sequence));
             let any_valid_window = self.windows.iter().any(|window| unsafe {
                 IsWindow(HWND(window.id as *mut std::ffi::c_void)).as_bool()
             });
@@ -337,45 +354,34 @@ impl Workspace {
         };
     }
 }
-/// Renders the controls for managing a specific window within a workspace.
-///
-/// This function creates an interface for interacting with a window's position settings.
-/// It allows the user to view and modify the home and target positions of the window, as well as capture or move
-/// the window to these positions. Each control is laid out in a horizontal UI group, with labels, input fields,
-/// and buttons.
+/// Presents egui UI elements for configuring **one** `Window`’s positioning data: 
+/// its **Home** and **Target** coordinates, plus actions to **capture** or **move** the window.
 ///
 /// # Behavior
-/// - Provides UI elements for adjusting and capturing the window's home and target positions.
-/// - Allows moving the window to the home or target position using the `move_window` function.
-/// - Enables capturing the current window position using the `get_window_position` function.
+/// - Displays two horizontal rows, one for the `home` position and one for the `target` position.
+/// - In each row:
+///   - Shows editable numeric fields (`DragValue`) for `x`, `y`, `width (w)`, and `height (h)`.
+///   - Offers a **“Capture”** button to read the current on-screen position via
+///     [`get_window_position`](../../window_manager/fn.get_window_position.html).
+///   - Offers a **“Move to ...”** button that calls [`move_window`](../../window_manager/fn.move_window.html)
+///     to reposition the window immediately.
+/// - Any failures (e.g., the window is invalid or moving fails) are logged as warnings.
+///
+/// # Side Effects
+/// - Potentially moves the window on the user’s desktop if “Move” is clicked.
+/// - Updates the `home` or `target` fields in `window` when “Capture” is used.
+/// - Logs messages about actions taken (`info!`, `warn!`) via the `log` crate.
 ///
 /// # Example
 /// ```rust
-/// render_window_controls(ui, &mut window);
+/// egui::CentralPanel::default().show(ctx, |ui| {
+///     render_window_controls(ui, &mut my_window);
+/// });
 /// ```
 ///
-/// # Dependencies
-/// - Relies on the `get_window_position` function to capture the current position of the window.
-/// - Uses the `move_window` function to reposition the window.
-///
-/// # Parameters
-/// - `ui: &mut egui::Ui`: The UI context to render the controls.
-/// - `window: &mut Window`: The window instance for which controls are rendered.
-///
-/// # Side Effects
-/// - Directly modifies the `home` and `target` fields of the `Window` struct based on user interaction.
-/// - Calls Win32 API functions via `move_window` and `get_window_position` to interact with system windows.
-///
-/// # Error Conditions
-/// - If the `move_window` function fails to reposition the window, a warning is logged.
-///
 /// # Notes
-/// - Ensure the window's HWND is valid before attempting to move or capture its position.
-/// - The `home` and `target` fields represent `(x, y, width, height)` tuples defining the window's position.
-///
-/// # Example UI Interaction
-/// - Drag inputs allow numerical adjustment of the `home` and `target` fields.
-/// - Buttons trigger actions to move or capture window positions.
+/// - This function is called inside `render_details(...)` to iterate over each `Window` in a `Workspace`.
+/// - Relies on Win32 calls under the hood to interact with actual OS-level windows (via `HWND`).
 pub fn render_window_controls(ui: &mut egui::Ui, window: &mut Window) {
     // Home position controls
     ui.horizontal(|ui| {
@@ -427,13 +433,37 @@ pub fn render_window_controls(ui: &mut egui::Ui, window: &mut Window) {
         }
     });
 }
-/// Represents a window tracked within a workspace.
+
+/// A **logical record** of a window managed by the application, linking its **HWND** (`id`)
+/// and **title** to two possible positions (`home` and `target`).
 ///
 /// # Fields
-/// - `id`: The unique identifier (HWND) of the window.
-/// - `title`: The title of the window.
-/// - `home`: The home position `(x, y, width, height)` of the window.
-/// - `target`: The target position `(x, y, width, height)` of the window.
+/// - `id`: The unique handle (`HWND` cast to `usize`) identifying the window in the OS.
+/// - `title`: A user-friendly title string, typically captured from the actual window’s title bar.
+/// - `home`: A tuple `(x, y, width, height)` describing the “home” position (and size) for this window.
+/// - `target`: A tuple `(x, y, width, height)` describing the “target” position (and size).
+/// - `valid`: Indicates whether the window is considered valid (e.g., captured from a real HWND).
+///
+/// # Behavior
+/// - Used within a `Workspace` to toggle windows between `home` and `target` positions.
+/// - If `valid` is `false`, the UI and logic may treat this window as non-existent or needing recapture.
+///
+/// # Example
+/// ```rust
+/// let window = Window {
+///     id: 12345,  // Some valid HWND cast to usize
+///     title: "My App".to_string(),
+///     home: (0, 0, 800, 600),
+///     target: (100, 100, 1024, 768),
+///     valid: true,
+/// };
+/// ```
+///
+/// # Notes
+/// - This struct is [`Serialize`](https://docs.rs/serde/latest/serde/trait.Serialize.html)
+///   and [`Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html),
+///   meaning it can be saved to and loaded from JSON or other formats.
+/// - The actual OS-specific window handle is stored in `id`; we cast it from/to `HWND` when using Win32 APIs.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Window {
     pub id: usize,
@@ -443,23 +473,28 @@ pub struct Window {
     pub valid: bool,
 }
 
-/// Validates if a key combination string is in a valid format.
+/// Checks whether the provided `input` string (e.g., `"Ctrl+Alt+F5"`, `"Win+Shift+Z"`) matches a valid hotkey pattern.
 ///
-/// # Arguments
-/// - `input`: The key combination string to validate (e.g., "Ctrl+Alt+H").
+/// # Behavior
+/// - Uses a [`regex`](https://crates.io/crates/regex) pattern to match up to four possible modifiers
+///   (`Ctrl`, `Alt`, `Shift`, `Win`) followed by a single main key (e.g., `F1`, `A`, `Esc`, `LeftAlt`, etc.).
+/// - Returns `true` if the string fully conforms to the recognized hotkey format, otherwise `false`.
 ///
-/// # Returns
-/// - `true` if the key combination is valid.
-/// - `false` otherwise.
+/// # Side Effects
+/// - None. The function only checks against a compiled regex and does not mutate any state.
 ///
 /// # Example
-/// ```
+/// ```rust
 /// if is_valid_key_combo("Ctrl+Shift+P") {
-///     println!("Valid key combo.");
+///     println!("Valid key combo!");
 /// } else {
 ///     println!("Invalid key combo.");
 /// }
 /// ```
+///
+/// # Notes
+/// - This function does not verify whether the key is actually usable in Windows (for that, see
+///   [`virtual_key_from_string`](../../window_manager/fn.virtual_key_from_string.html)).
 pub fn is_valid_key_combo(input: &str) -> bool {
     let pattern = r"^(?:(?:Ctrl|Alt|Shift|Win)\+)?(?:(?:Ctrl|Alt|Shift|Win)\+)?(?:(?:Ctrl|Alt|Shift|Win)\+)?(?:(?:Ctrl|Alt|Shift|Win)\+)?(?:F(?:[1-9]|1[0-2]|1[3-9]|2[0-4])|[A-Z]|[0-9]|NUMPAD[0-9]|NUMPAD(?:MULTIPLY|ADD|SEPARATOR|SUBTRACT|DOT|DIVIDE)|UP|DOWN|LEFT|RIGHT|BACKSPACE|TAB|ENTER|PAUSE|CAPSLOCK|ESCAPE|SPACE|PAGEUP|PAGEDOWN|END|HOME|INSERT|DELETE|OEM_(?:PLUS|COMMA|MINUS|PERIOD|[1-7])|PRINTSCREEN|SCROLLLOCK|NUMLOCK|LEFT(?:SHIFT|CTRL|ALT)|RIGHT(?:SHIFT|CTRL|ALT))$";
     let re = Regex::new(pattern).unwrap();

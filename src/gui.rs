@@ -1,4 +1,3 @@
-use crate::hotkey::Hotkey;
 use crate::utils::*;
 use crate::window_manager::check_hotkeys;
 use crate::workspace::*;
@@ -116,6 +115,38 @@ pub fn run_gui(app: App) {
 }
 
 impl EframeApp for App {
+    /// The **main update callback** for this application, invoked by the eframe framework on each GUI frame.
+    ///
+    /// # Behavior
+    /// - Renders the central panel and its contents using egui, calling:
+    ///   - `render_header` for the top header section (title, buttons).
+    ///   - `render_workspace_list` for listing and managing individual workspaces.
+    /// - Collects user actions (e.g., "Save Workspaces," "Add Workspace," or "Delete Workspace") and processes them:
+    ///   - `save_workspaces()` is called if the user clicks "Save Workspaces."
+    ///   - `add_workspace(...)` is invoked if they click "Add New Workspace."
+    ///   - `delete_workspace(...)` is invoked if they click "Delete Workspace."
+    /// - By default, keeps the panel open and re-renders continuously; any user-driven changes are immediately reflected.
+    ///
+    /// # Side Effects
+    /// - Modifies internal state such as the `workspaces` vector when adding or deleting entries.
+    /// - Calls `save_workspaces()` to persist changes to disk on demand.
+    /// - Responds in real time to user interactions (mouse clicks, text edits, etc.).
+    ///
+    /// # Example
+    /// This method is **automatically** called by eframe at ~60 FPS (or as fast as the GPU can handle), so you typically
+    /// don’t call it manually. Instead, you customize how your UI should behave within this callback:
+    /// ```rust
+    /// impl eframe::App for App {
+    ///     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    ///         // ... custom UI code here ...
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// # Notes
+    /// - The `ctx` parameter provides access to egui’s painting and widget APIs.
+    /// - The `_frame` parameter can be used to control window-level properties (size, decorations, etc.), though in this
+    ///   code it’s not currently used.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut save_flag = false;
         let mut new_workspace: Option<Workspace> = None;
